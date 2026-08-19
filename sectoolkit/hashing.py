@@ -32,3 +32,17 @@ def compute_hmac(data: bytes, key: bytes, algorithm: str = "sha256") -> str:
     if algorithm not in SUPPORTED_ALGORITHMS:
         raise ValueError(f"Unsupported algorithm: {algorithm}")
     return hmac_module.new(key, data, algorithm).hexdigest()
+
+
+def _register():
+    from sectoolkit.registry import register_check
+
+    register_check(
+        name="hashes",
+        description="Compute MD5/SHA1/SHA256/SHA512 hashes",
+        applies_to=lambda path: True,  # every file can be hashed
+        run=hash_file_all,
+    )
+
+
+_register()

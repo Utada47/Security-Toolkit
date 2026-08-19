@@ -52,6 +52,28 @@ with zero CLI changes needed). Equivalent to `sectoolkit analyze myfile.txt`.
 > command name collides with a filename. Use `sectoolkit analyze ./hash`
 > (with an explicit path) to force analysis in that edge case.
 
+### Crack a hash (dictionary attack)
+
+```bash
+sectoolkit crack <hash> wordlists/sample-common-passwords.txt --algorithm sha256
+```
+
+Tries every line in the wordlist against the target hash. Reads the
+wordlist line-by-line, so it works fine with very large files (millions of
+entries) without loading everything into memory.
+
+**Use case:** auditing hashes *you own* — e.g. checking whether a password
+hash from your own system/database would fall to a common wordlist, as
+part of a security review. This is not for attacking accounts or systems
+you don't have explicit authorization to test.
+
+A small bundled wordlist (`wordlists/sample-common-passwords.txt`, ~30
+entries from widely-published "most common passwords" lists) is included
+for quick testing. For real audits, use a larger list such as
+[SecLists](https://github.com/danielmiessler/SecLists) (`rockyou.txt` and
+similar) — download it yourself and point `--wordlist` at it; this project
+does not bundle large third-party wordlists.
+
 ### Hashing
 
 ```bash
@@ -107,6 +129,8 @@ tests/          # pytest test suite
 - [x] Hashing (MD5/SHA1/SHA256/SHA512) + HMAC
 - [x] Base64/hex encoding utilities
 - [x] AES-256-GCM file encryption
+- [x] Auto-analyze mode (`sectoolkit <file>`)
+- [x] Dictionary-based hash cracking
 - [ ] File analysis: entropy, magic-byte type detection, metadata, strings extraction
 - [ ] Password security: strength checker, breach check (HaveIBeenPwned)
 - [ ] Network diagnostics: port scanner, DNS lookup, SSL/TLS certificate checker

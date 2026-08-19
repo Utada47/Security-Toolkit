@@ -24,3 +24,11 @@ def hash_file(path: str, algorithm: str = "sha256", chunk_size: int = 65536) -> 
 
 def hash_file_all(path: str) -> dict:
     return {algo: hash_file(path, algo) for algo in SUPPORTED_ALGORITHMS}
+
+
+def compute_hmac(data: bytes, key: bytes, algorithm: str = "sha256") -> str:
+    import hmac as hmac_module
+
+    if algorithm not in SUPPORTED_ALGORITHMS:
+        raise ValueError(f"Unsupported algorithm: {algorithm}")
+    return hmac_module.new(key, data, algorithm).hexdigest()

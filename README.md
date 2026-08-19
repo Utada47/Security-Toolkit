@@ -24,7 +24,33 @@ source venv/bin/activate       # on Windows Git Bash: source venv/Scripts/activa
 pip install -e .
 ```
 
+### Install globally (WSL / Linux / Mac) — no manual venv activation needed
+
+```bash
+sudo apt install pipx -y   # Ubuntu/Debian
+pipx ensurepath
+pipx install -e .
+```
+
+After that, `sectoolkit` works from any directory without activating a venv.
+
 ## CLI Usage
+
+### Auto-analyze — just point it at a file
+
+```bash
+sectoolkit myfile.txt
+```
+
+Runs **every applicable check** against the file automatically (currently:
+hashing — more checks will run automatically here as new modules are added,
+with zero CLI changes needed). Equivalent to `sectoolkit analyze myfile.txt`.
+
+> **Note:** if a file in your current directory happens to be named exactly
+> `hash`, `encrypt`, `decrypt`, or `analyze`, the subcommand takes priority
+> over auto-analyzing that file — same behavior as `git`/`npm` when a
+> command name collides with a filename. Use `sectoolkit analyze ./hash`
+> (with an explicit path) to force analysis in that edge case.
 
 ### Hashing
 

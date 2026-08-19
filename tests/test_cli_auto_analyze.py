@@ -44,6 +44,35 @@ def test_analyze_subcommand_works_explicitly(tmp_path):
     assert "Analyzing:" in result.output
 
 
+def test_crack_command_finds_password(tmp_path):
+    from sectoolkit.hashing import hash_bytes
+
+    wordlist = tmp_path / "words.txt"
+    wordlist.write_text("123456\npassword\nmysecretpass\n")
+    target = hash_bytes(b"mysecretpass", "sha256")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["crack", target, str(wordlist)])
+
+    assert result.exit_code == 0
+    assert "MATCH FOUND" in result.output
+    assert "mysecretpass" in result.output
+
+
+def test_crack_command_reports_no_match(tmp_path):
+    from sectoolkit.hashing import hash_bytes
+
+    wordlist = tmp_path / "words.txt"
+    wordlist.write_text("123456\npassword\n")
+    target = hash_bytes(b"not-in-wordlist", "sha256")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["crack", target, str(wordlist)])
+
+    assert result.exit_code == 0
+    assert "No match found" in result.output
+
+
 def test_subcommand_name_takes_priority_over_same_named_file(tmp_path, monkeypatch):
     # If a file literally named 'hash' exists in the CWD, the 'hash' SUBCOMMAND
     # wins over auto-analyzing a file called 'hash' — matches how git/npm/etc.

@@ -5,6 +5,7 @@ from sectoolkit import __version__
 from sectoolkit import hashing  # noqa: F401 - triggers check registration
 from sectoolkit.hashing import hash_file_all, SUPPORTED_ALGORITHMS, hash_file
 from sectoolkit.crypto import encrypt_file, decrypt_file
+from sectoolkit.crack import crack_hash, count_lines
 from sectoolkit.analyze import analyze_file, suggest_commands
 
 
@@ -106,6 +107,40 @@ def analyze(filepath):
         else:
             click.echo(f"  {result}")
         click.echo("")
+
+
+@cli.command()
+@click.argument("target_hash")
+@click.argument("wordlist", type=click.Path(exists=True))
+@click.option(
+    "--algorithm",
+    "-a",
+    type=click.Choice(SUPPORTED_ALGORITHMS),
+    default="sha256",
+    help="Hash algorithm the target hash was generated with.",
+)
+def crack(target_hash, wordlist, algorithm):
+    """Try to find a password matching TARGET_HASH using a WORDLIST file.
+
+    Use this to audit hashes you own (e.g. "is this password hash trivially
+    guessable from a common wordlist?"). Reads the wordlist line-by-line, so
+    very large wordlists (millions of entries) are fine.
+    """
+    click.echo(f"Counting wordlist entries...")
+    total = count_lines(wordlist)
+    click.echo(f"Trying {total:,} candidates against the {algorithm} hash...")
+
+    def report_progress(current, total):
+        click.echo(f"  ...{current:,} / {total:,} tried", err=True)
+
+    result = crack_hash(
+        target_hash, wordlist, algorithm, progress_callback=report_progress
+    )
+
+    if result is not None:
+        click.echo(f"MATCH FOUND: {result!r}")
+    else:
+        click.echo("No match found in this wordlist.")
 
 
 if __name__ == "__main__":

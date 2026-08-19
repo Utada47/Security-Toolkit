@@ -1,12 +1,46 @@
 """Command-line interface for the security toolkit."""
+import os
 import click
+from sectoolkit import __version__
+from sectoolkit import hashing  # noqa: F401 - triggers check registration
 from sectoolkit.hashing import hash_file_all, SUPPORTED_ALGORITHMS, hash_file
 from sectoolkit.crypto import encrypt_file, decrypt_file
+from sectoolkit.analyze import analyze_file, suggest_commands
 
 
-@click.group()
+class AutoAnalyzeGroup(click.Group):
+    """A click Group that falls back to 'analyze <file>' when the first
+    argument isn't a known subcommand but IS an existing file path.
+
+    This is what makes 'sectoolkit myfile.txt' work directly, without
+    typing 'sectoolkit analyze myfile.txt' or any other subcommand name.
+    """
+
+    def resolve_command(self, ctx, args):
+        try:
+            return super().resolve_command(ctx, args)
+        except click.UsageError:
+            candidate = args[0]
+            if os.path.exists(candidate):
+                return "analyze", self.commands["analyze"], args
+            raise
+
+
+@click.group(cls=AutoAnalyzeGroup)
+@click.version_option(version=__version__, prog_name="sectoolkit")
 def cli():
-    """Security Toolkit — defensive file & system analysis utilities."""
+    """Security Toolkit — an all-in-one defensive cybersecurity CLI.
+
+    \b
+    Modules:
+      hash        Compute file hashes (md5/sha1/sha256/sha512)
+      encrypt     Encrypt a file (AES-256-GCM)
+      decrypt     Decrypt a file encrypted with this tool
+      analyze     Run every applicable check against a file (also runs
+                  automatically if you just type: sectoolkit <file>)
+
+    Run 'sectoolkit COMMAND --help' for details on any command.
+    """
     pass
 
 
@@ -49,6 +83,29 @@ def decrypt(filepath, output, password):
     except Exception:
         raise click.ClickException("Decryption failed: wrong password or corrupted file")
     click.echo(f"Decrypted -> {output}")
+
+
+@cli.command()
+@click.argument("filepath", type=click.Path(exists=True))
+def analyze(filepath):
+    """Run every applicable check against a file and print a report.
+
+    This also runs automatically when you type 'sectoolkit <file>'
+    without any subcommand.
+    """
+    applicable = suggest_commands(filepath)
+    click.echo(f"Analyzing: {filepath}")
+    click.echo(f"Applicable checks: {', '.join(applicable)}\n")
+
+    results = analyze_file(filepath)
+    for check_name, result in results.items():
+        click.echo(f"[{check_name}]")
+        if isinstance(result, dict):
+            for key, value in result.items():
+                click.echo(f"  {key}: {value}")
+        else:
+            click.echo(f"  {result}")
+        click.echo("")
 
 
 if __name__ == "__main__":

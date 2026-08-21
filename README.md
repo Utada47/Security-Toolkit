@@ -42,9 +42,16 @@ After that, `sectoolkit` works from any directory without activating a venv.
 sectoolkit myfile.txt
 ```
 
-Runs **every applicable check** against the file automatically (currently:
-hashing — more checks will run automatically here as new modules are added,
-with zero CLI changes needed). Equivalent to `sectoolkit analyze myfile.txt`.
+Runs **every applicable check** against the file automatically:
+
+- **hashes** — MD5/SHA1/SHA256/SHA512
+- **entropy** — flags likely encrypted/compressed/packed data
+- **filetype** — detects the real file type via magic bytes and flags
+  extension mismatches (e.g. an `.exe` disguised as `.jpg`)
+- **strings** — extracts embedded URLs/IPs from binary content
+
+Equivalent to `sectoolkit analyze myfile.txt`. As new checks are added to
+the toolkit, they show up here automatically — no CLI changes needed.
 
 > **Note:** if a file in your current directory happens to be named exactly
 > `hash`, `encrypt`, `decrypt`, or `analyze`, the subcommand takes priority
@@ -131,7 +138,8 @@ tests/          # pytest test suite
 - [x] AES-256-GCM file encryption
 - [x] Auto-analyze mode (`sectoolkit <file>`)
 - [x] Dictionary-based hash cracking
-- [ ] File analysis: entropy, magic-byte type detection, metadata, strings extraction
+- [x] File analysis: entropy, magic-byte type detection, strings/URL/IP extraction
+- [ ] File metadata extraction (EXIF, PDF metadata, Office macro detection)
 - [ ] Password security: strength checker, breach check (HaveIBeenPwned)
 - [ ] Network diagnostics: port scanner, DNS lookup, SSL/TLS certificate checker
 - [ ] Log analysis: suspicious pattern detection

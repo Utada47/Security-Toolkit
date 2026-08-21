@@ -38,3 +38,34 @@ def find_urls_and_ips(strings: list) -> dict:
         urls.update(_URL_PATTERN.findall(s))
         ips.update(_IP_PATTERN.findall(s))
     return {"urls": sorted(urls), "ips": sorted(ips)}
+
+
+def _strings_check(path: str) -> dict:
+    """Auto-analyze summary: string count + any URLs/IPs found.
+
+    Deliberately does NOT return the full extracted string list here —
+    that could be thousands of entries for a large binary and would flood
+    the auto-analyze output. Use 'extract_strings()' directly, or a future
+    dedicated CLI command, for the full dump.
+    """
+    strings = extract_strings(path, min_length=6, limit=5000)
+    indicators = find_urls_and_ips(strings)
+    return {
+        "strings_found": len(strings),
+        "urls": indicators["urls"],
+        "ips": indicators["ips"],
+    }
+
+
+def _register():
+    from sectoolkit.registry import register_check
+
+    register_check(
+        name="strings",
+        description="Extract readable strings; surface embedded URLs/IPs",
+        applies_to=lambda path: True,
+        run=_strings_check,
+    )
+
+
+_register()

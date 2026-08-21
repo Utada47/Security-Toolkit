@@ -3,6 +3,7 @@ import os
 import click
 from sectoolkit import __version__
 from sectoolkit import hashing  # noqa: F401 - triggers check registration
+from sectoolkit import entropy  # noqa: F401 - triggers check registration
 from sectoolkit.hashing import hash_file_all, SUPPORTED_ALGORITHMS, hash_file
 from sectoolkit.crypto import encrypt_file, decrypt_file
 from sectoolkit.crack import crack_hash, count_lines

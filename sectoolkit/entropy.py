@@ -39,3 +39,22 @@ def interpret_entropy(entropy: float) -> str:
     if entropy < 7.5:
         return "moderate (typical of normal binaries, images, or documents)"
     return "high (typical of encrypted, compressed, or packed data)"
+
+
+def _entropy_check(path: str) -> dict:
+    value = calculate_file_entropy(path)
+    return {"value": round(value, 4), "interpretation": interpret_entropy(value)}
+
+
+def _register():
+    from sectoolkit.registry import register_check
+
+    register_check(
+        name="entropy",
+        description="Shannon entropy (detects encrypted/compressed/packed data)",
+        applies_to=lambda path: True,
+        run=_entropy_check,
+    )
+
+
+_register()

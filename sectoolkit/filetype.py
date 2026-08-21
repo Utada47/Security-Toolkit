@@ -65,3 +65,21 @@ def extension_mismatch(path: str) -> dict:
     suspicious = expected_substring is not None and expected_substring not in detected
 
     return {"extension": ext or "(none)", "detected_type": detected, "suspicious": suspicious}
+
+
+def _filetype_check(path: str) -> dict:
+    return extension_mismatch(path)
+
+
+def _register():
+    from sectoolkit.registry import register_check
+
+    register_check(
+        name="filetype",
+        description="Detect real file type via magic bytes; flag extension mismatches",
+        applies_to=lambda path: True,
+        run=_filetype_check,
+    )
+
+
+_register()

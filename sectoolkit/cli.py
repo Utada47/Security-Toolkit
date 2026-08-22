@@ -184,5 +184,33 @@ def strings_cmd(filepath, min_length, limit, urls_only):
         click.echo(s)
 
 
+@cli.command(name="metadata")
+@click.argument("filepath", type=click.Path(exists=True))
+def metadata_cmd(filepath):
+    """Show full metadata for an image or PDF file.
+
+    Shows the complete metadata dict (EXIF for images, document info for
+    PDFs) — the auto-analyze summary in 'sectoolkit <file>' shows the same
+    data, so this command is mainly useful when you want metadata output
+    in isolation without the other checks running alongside it.
+    """
+    from sectoolkit.metadata_image import extract_exif, _is_image
+    from sectoolkit.metadata_pdf import extract_pdf_metadata, _is_pdf
+
+    if _is_image(filepath):
+        data = extract_exif(filepath)
+    elif _is_pdf(filepath):
+        data = extract_pdf_metadata(filepath)
+    else:
+        raise click.ClickException("File is not a recognized image or PDF")
+
+    if not data:
+        click.echo("No metadata found.")
+        return
+
+    for key, value in data.items():
+        click.echo(f"{key}: {value}")
+
+
 if __name__ == "__main__":
     cli()

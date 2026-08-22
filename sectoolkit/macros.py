@@ -58,3 +58,17 @@ def detect_macros(path: str) -> dict:
         }
     finally:
         parser.close()
+
+
+def _register():
+    from sectoolkit.registry import register_check
+
+    register_check(
+        name="macros",
+        description="Detect VBA macros in Office documents (common phishing vector)",
+        applies_to=_is_office_file,
+        run=detect_macros,
+    )
+
+
+_register()

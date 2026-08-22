@@ -7,6 +7,7 @@ from sectoolkit import entropy  # noqa: F401 - triggers check registration
 from sectoolkit import filetype  # noqa: F401 - triggers check registration
 from sectoolkit import strings_extract  # noqa: F401 - triggers check registration
 from sectoolkit import metadata_pdf  # noqa: F401 - triggers check registration
+from sectoolkit import metadata_image  # noqa: F401 - triggers check registration
 from sectoolkit.hashing import hash_file_all, SUPPORTED_ALGORITHMS, hash_file
 from sectoolkit.crypto import encrypt_file, decrypt_file
 from sectoolkit.crack import crack_hash, count_lines

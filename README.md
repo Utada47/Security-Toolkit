@@ -169,7 +169,7 @@ tests/          # pytest test suite
 - [x] Auto-analyze mode (`sectoolkit <file>`)
 - [x] Dictionary-based hash cracking
 - [x] File analysis: entropy, magic-byte type detection, strings/URL/IP extraction
-- [ ] File metadata extraction (EXIF, PDF metadata, Office macro detection)
+- [x] File metadata extraction (EXIF, PDF metadata, Office macro detection)
 - [ ] Password security: strength checker, breach check (HaveIBeenPwned)
 - [ ] Network diagnostics: port scanner, DNS lookup, SSL/TLS certificate checker
 - [ ] Log analysis: suspicious pattern detection

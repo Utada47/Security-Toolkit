@@ -99,6 +99,30 @@ def test_analyze_json_output_omits_plain_text_report_lines(tmp_path):
     assert "Applicable checks:" not in result.output
 
 
+def test_strings_command_prints_extracted_strings(tmp_path):
+    binfile = tmp_path / "sample.bin"
+    binfile.write_bytes(b"\x00\x01hello world\x00\x02testing123\x00")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["strings", str(binfile), "--min-length", "4"])
+
+    assert result.exit_code == 0
+    assert "hello world" in result.output
+    assert "testing123" in result.output
+
+
+def test_strings_command_urls_only_flag(tmp_path):
+    binfile = tmp_path / "sample.bin"
+    binfile.write_bytes(b"\x00connecting to http://evil.example.com and 10.0.0.5\x00")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["strings", str(binfile), "--urls-only"])
+
+    assert result.exit_code == 0
+    assert "URL: http://evil.example.com" in result.output
+    assert "IP:  10.0.0.5" in result.output
+
+
 def test_subcommand_name_takes_priority_over_same_named_file(tmp_path, monkeypatch):
     # If a file literally named 'hash' exists in the CWD, the 'hash' SUBCOMMAND
     # wins over auto-analyzing a file called 'hash' — matches how git/npm/etc.

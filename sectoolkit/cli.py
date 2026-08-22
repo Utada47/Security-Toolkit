@@ -12,6 +12,7 @@ from sectoolkit import macros  # noqa: F401 - triggers check registration
 from sectoolkit.hashing import hash_file_all, SUPPORTED_ALGORITHMS, hash_file
 from sectoolkit.crypto import encrypt_file, decrypt_file
 from sectoolkit.crack import crack_hash, count_lines
+from sectoolkit.strings_extract import extract_strings, find_urls_and_ips
 from sectoolkit.analyze import analyze_file, suggest_commands
 
 
@@ -155,6 +156,32 @@ def crack(target_hash, wordlist, algorithm):
         click.echo(f"MATCH FOUND: {result!r}")
     else:
         click.echo("No match found in this wordlist.")
+
+
+@cli.command(name="strings")
+@click.argument("filepath", type=click.Path(exists=True))
+@click.option("--min-length", "-n", default=6, help="Minimum length of a string to report.")
+@click.option("--limit", "-l", default=1000, help="Maximum number of strings to print.")
+@click.option("--urls-only", is_flag=True, help="Only print detected URLs and IPs, not every string.")
+def strings_cmd(filepath, min_length, limit, urls_only):
+    """Extract the full list of readable strings from a file.
+
+    Unlike the 'strings' entry shown in 'sectoolkit <file>' auto-analyze
+    (which only summarizes counts + detected URLs/IPs), this prints every
+    matching string, similar to the Unix 'strings' command.
+    """
+    extracted = extract_strings(filepath, min_length=min_length, limit=limit)
+
+    if urls_only:
+        indicators = find_urls_and_ips(extracted)
+        for url in indicators["urls"]:
+            click.echo(f"URL: {url}")
+        for ip in indicators["ips"]:
+            click.echo(f"IP:  {ip}")
+        return
+
+    for s in extracted:
+        click.echo(s)
 
 
 if __name__ == "__main__":

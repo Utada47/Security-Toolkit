@@ -94,17 +94,25 @@ def decrypt(filepath, output, password):
 
 @cli.command()
 @click.argument("filepath", type=click.Path(exists=True))
-def analyze(filepath):
+@click.option("--json", "as_json", is_flag=True, help="Output the report as JSON instead of plain text.")
+def analyze(filepath, as_json):
     """Run every applicable check against a file and print a report.
 
     This also runs automatically when you type 'sectoolkit <file>'
     without any subcommand.
     """
+    results = analyze_file(filepath)
+
+    if as_json:
+        import json
+
+        click.echo(json.dumps({"file": filepath, "results": results}, indent=2, default=str))
+        return
+
     applicable = suggest_commands(filepath)
     click.echo(f"Analyzing: {filepath}")
     click.echo(f"Applicable checks: {', '.join(applicable)}\n")
 
-    results = analyze_file(filepath)
     for check_name, result in results.items():
         click.echo(f"[{check_name}]")
         if isinstance(result, dict):

@@ -49,15 +49,45 @@ Runs **every applicable check** against the file automatically:
 - **filetype** — detects the real file type via magic bytes and flags
   extension mismatches (e.g. an `.exe` disguised as `.jpg`)
 - **strings** — extracts embedded URLs/IPs from binary content
+- **image_metadata** — EXIF data for images, including GPS location if present
+- **pdf_metadata** — author, producer, page count, encryption status for PDFs
+- **macros** — detects VBA macros in Office documents (`.doc`/`.docm`/`.xls`/etc.)
 
-Equivalent to `sectoolkit analyze myfile.txt`. As new checks are added to
-the toolkit, they show up here automatically — no CLI changes needed.
+Each check only runs when it's actually relevant (e.g. `image_metadata` only
+applies to image files, `macros` only to Office documents). Equivalent to
+`sectoolkit analyze myfile.txt`. As new checks are added to the toolkit,
+they show up here automatically — no CLI changes needed.
+
+Add `--json` for machine-readable output:
+
+```bash
+sectoolkit analyze myfile.txt --json
+```
 
 > **Note:** if a file in your current directory happens to be named exactly
 > `hash`, `encrypt`, `decrypt`, or `analyze`, the subcommand takes priority
 > over auto-analyzing that file — same behavior as `git`/`npm` when a
 > command name collides with a filename. Use `sectoolkit analyze ./hash`
 > (with an explicit path) to force analysis in that edge case.
+
+### Full string dump
+
+```bash
+sectoolkit strings myfile.bin --min-length 6 --urls-only
+```
+
+Prints every matching string (unlike the auto-analyze summary, which only
+shows counts and detected URLs/IPs) — closer to the Unix `strings` command.
+
+### Full metadata dump
+
+```bash
+sectoolkit metadata photo.jpg
+sectoolkit metadata document.pdf
+```
+
+Shows the complete metadata dict on its own, without the other checks
+running alongside it.
 
 ### Crack a hash (dictionary attack)
 

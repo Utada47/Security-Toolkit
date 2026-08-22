@@ -73,6 +73,32 @@ def test_crack_command_reports_no_match(tmp_path):
     assert "No match found" in result.output
 
 
+def test_analyze_json_output_is_valid_json(tmp_path):
+    import json
+
+    sample = tmp_path / "sample.txt"
+    sample.write_text("hello world")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["analyze", str(sample), "--json"])
+
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["file"] == str(sample)
+    assert "hashes" in parsed["results"]
+
+
+def test_analyze_json_output_omits_plain_text_report_lines(tmp_path):
+    sample = tmp_path / "sample.txt"
+    sample.write_text("hello world")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["analyze", str(sample), "--json"])
+
+    assert "Analyzing:" not in result.output
+    assert "Applicable checks:" not in result.output
+
+
 def test_subcommand_name_takes_priority_over_same_named_file(tmp_path, monkeypatch):
     # If a file literally named 'hash' exists in the CWD, the 'hash' SUBCOMMAND
     # wins over auto-analyzing a file called 'hash' — matches how git/npm/etc.

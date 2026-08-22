@@ -29,3 +29,25 @@ def extract_pdf_metadata(path: str) -> dict:
     result["page_count"] = len(reader.pages)
 
     return result
+
+
+def _is_pdf(path: str) -> bool:
+    try:
+        with open(path, "rb") as f:
+            return f.read(5) == b"%PDF-"
+    except Exception:
+        return False
+
+
+def _register():
+    from sectoolkit.registry import register_check
+
+    register_check(
+        name="pdf_metadata",
+        description="Extract PDF metadata (author, producer, encryption status)",
+        applies_to=_is_pdf,
+        run=extract_pdf_metadata,
+    )
+
+
+_register()

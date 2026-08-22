@@ -14,15 +14,18 @@ def extract_pdf_metadata(path: str) -> dict:
     except Exception:
         return {}
 
-    if reader.metadata is None:
-        return {}
+    result = {"is_encrypted": reader.is_encrypted, "page_count": None}
 
-    result = {}
-    for key, value in reader.metadata.items():
-        clean_key = key.lstrip("/")
-        result[clean_key] = str(value) if value is not None else None
+    if reader.is_encrypted:
+        # Metadata (and page count) are inaccessible without the password —
+        # report what we safely know rather than crashing on locked content.
+        return result
+
+    if reader.metadata is not None:
+        for key, value in reader.metadata.items():
+            clean_key = key.lstrip("/")
+            result[clean_key] = str(value) if value is not None else None
 
     result["page_count"] = len(reader.pages)
-    result["is_encrypted"] = reader.is_encrypted
 
     return result

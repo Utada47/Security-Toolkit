@@ -99,6 +99,34 @@ def test_analyze_json_output_omits_plain_text_report_lines(tmp_path):
     assert "Applicable checks:" not in result.output
 
 
+def test_metadata_command_shows_pdf_metadata(tmp_path):
+    from pypdf import PdfWriter
+
+    pdf_path = tmp_path / "doc.pdf"
+    writer = PdfWriter()
+    writer.add_blank_page(width=200, height=200)
+    writer.add_metadata({"/Author": "Test Author"})
+    with open(pdf_path, "wb") as f:
+        writer.write(f)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["metadata", str(pdf_path)])
+
+    assert result.exit_code == 0
+    assert "Test Author" in result.output
+
+
+def test_metadata_command_rejects_unsupported_file(tmp_path):
+    text_file = tmp_path / "notes.txt"
+    text_file.write_text("plain text, not image or pdf")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["metadata", str(text_file)])
+
+    assert result.exit_code != 0
+    assert "not a recognized image or PDF" in result.output
+
+
 def test_strings_command_prints_extracted_strings(tmp_path):
     binfile = tmp_path / "sample.bin"
     binfile.write_bytes(b"\x00\x01hello world\x00\x02testing123\x00")

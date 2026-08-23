@@ -144,6 +144,31 @@ def test_check_password_command_reports_strong_password():
     assert "No issues found" in result.output
 
 
+def test_generate_password_command_respects_length():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["generate-password", "--length", "24"])
+
+    assert result.exit_code == 0
+    assert len(result.output.strip()) == 24
+
+
+def test_generate_password_command_respects_count():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["generate-password", "--count", "5"])
+
+    lines = result.output.strip().split("\n")
+    assert len(lines) == 5
+    assert len(set(lines)) == 5  # all distinct
+
+
+def test_generate_password_command_errors_on_too_short_length():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["generate-password", "--length", "2"])
+
+    assert result.exit_code != 0
+    assert "too short" in result.output
+
+
 def test_strings_command_prints_extracted_strings(tmp_path):
     binfile = tmp_path / "sample.bin"
     binfile.write_bytes(b"\x00\x01hello world\x00\x02testing123\x00")

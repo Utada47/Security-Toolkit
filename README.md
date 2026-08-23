@@ -132,6 +132,37 @@ Encryption uses **AES-256-GCM** (authenticated encryption — a wrong password
 or a tampered file will fail decryption loudly instead of silently returning
 garbage data).
 
+### Check a password's strength
+
+```bash
+sectoolkit check-password
+# prompts for a password with hidden input
+
+sectoolkit check-password --breach-check
+# also checks it against Have I Been Pwned (requires internet)
+```
+
+The strength check looks beyond just length: character-class diversity,
+sequential runs (`1234`, `abcd`), keyboard-adjacent patterns (`qwerty`),
+repeated characters, and membership in a small list of extremely common
+passwords. Rated `very weak` / `weak` / `moderate` / `strong`.
+
+The breach check uses **k-anonymity**: only the first 5 characters of the
+password's SHA1 hash are ever sent over the network — the password itself,
+and even its full hash, never leave your machine. `--breach-check` is
+opt-in; without it, this command makes no network calls at all.
+
+### Generate a secure password
+
+```bash
+sectoolkit generate-password
+sectoolkit generate-password --length 24 --count 5
+sectoolkit generate-password --no-symbols --length 12
+```
+
+Uses Python's `secrets` module (not `random`) for cryptographically secure
+randomness, and guarantees at least one character from each enabled class.
+
 ## Library usage
 
 ```python

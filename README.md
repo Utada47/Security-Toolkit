@@ -201,6 +201,6 @@ tests/          # pytest test suite
 - [x] Dictionary-based hash cracking
 - [x] File analysis: entropy, magic-byte type detection, strings/URL/IP extraction
 - [x] File metadata extraction (EXIF, PDF metadata, Office macro detection)
-- [ ] Password security: strength checker, breach check (HaveIBeenPwned)
+- [x] Password security: strength checker, breach check (HaveIBeenPwned), secure generator
 - [ ] Network diagnostics: port scanner, DNS lookup, SSL/TLS certificate checker
 - [ ] Log analysis: suspicious pattern detection

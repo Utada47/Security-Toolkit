@@ -89,6 +89,38 @@ sectoolkit metadata document.pdf
 Shows the complete metadata dict on its own, without the other checks
 running alongside it.
 
+### Check a password's strength
+
+```bash
+sectoolkit check-password
+# prompts for the password with hidden input
+
+sectoolkit check-password --password "mypassword" --breach-check
+```
+
+Rates the password (very weak / weak / moderate / strong) based on length,
+character-class diversity, an entropy estimate, and pattern detection
+(common passwords, sequential runs like `1234`, keyboard walks like
+`qwerty`, low character variety).
+
+Add `--breach-check` to also check the password against
+[Have I Been Pwned](https://haveibeenpwned.com/)'s breach database. This
+uses **k-anonymity**: only the first 5 characters of the password's SHA1
+hash are sent over the network — the password itself, and even its full
+hash, never leave your machine. Requires internet access; omit the flag to
+check strength fully offline.
+
+### Generate a secure password
+
+```bash
+sectoolkit generate-password --length 20 --count 3
+sectoolkit generate-password --no-symbols   # exclude a character class
+```
+
+Uses Python's `secrets` module (cryptographically secure), not `random`.
+Guarantees at least one character from each enabled class, then shuffles
+so the guaranteed characters aren't predictably placed.
+
 ### Crack a hash (dictionary attack)
 
 ```bash

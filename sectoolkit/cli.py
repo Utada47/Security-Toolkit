@@ -14,6 +14,7 @@ from sectoolkit.crypto import encrypt_file, decrypt_file
 from sectoolkit.crack import crack_hash, count_lines
 from sectoolkit.password_strength import check_strength
 from sectoolkit.password_generator import generate_password
+from sectoolkit.breach_check import check_password_breach
 from sectoolkit.strings_extract import extract_strings, find_urls_and_ips
 from sectoolkit.analyze import analyze_file, suggest_commands
 
@@ -216,7 +217,8 @@ def metadata_cmd(filepath):
 
 @cli.command(name="check-password")
 @click.option("--password", prompt=True, hide_input=True, help="Password to check (prompted securely if omitted).")
-def check_password(password):
+@click.option("--breach-check", is_flag=True, help="Also check this password against Have I Been Pwned (requires internet).")
+def check_password(password, breach_check):
     """Check a password's strength (pattern analysis + entropy estimate).
 
     Prompts for the password with hidden input if not piped/scripted, so
@@ -233,6 +235,22 @@ def check_password(password):
             click.echo(f"  - {issue}")
     else:
         click.echo("No issues found.")
+
+    if breach_check:
+        click.echo("")
+        try:
+            breach_result = check_password_breach(password)
+        except RuntimeError as exc:
+            click.echo(f"Breach check failed: {exc}")
+            return
+
+        if breach_result["breached"]:
+            click.echo(
+                f"⚠ This password has appeared in {breach_result['times_seen']:,} known breaches. "
+                "Do not use it."
+            )
+        else:
+            click.echo("✓ This password was not found in any known breach.")
 
 
 @cli.command(name="generate-password")

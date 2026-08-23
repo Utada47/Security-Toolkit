@@ -169,6 +169,49 @@ def test_generate_password_command_errors_on_too_short_length():
     assert "too short" in result.output
 
 
+def test_check_password_with_breach_flag_reports_breached(monkeypatch):
+    import sectoolkit.cli as cli_module
+
+    monkeypatch.setattr(
+        cli_module, "check_password_breach", lambda pw: {"breached": True, "times_seen": 12345}
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["check-password", "--password", "somepassword1!", "--breach-check"])
+
+    assert result.exit_code == 0
+    assert "12,345" in result.output
+    assert "Do not use it" in result.output
+
+
+def test_check_password_with_breach_flag_reports_clean(monkeypatch):
+    import sectoolkit.cli as cli_module
+
+    monkeypatch.setattr(
+        cli_module, "check_password_breach", lambda pw: {"breached": False, "times_seen": 0}
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["check-password", "--password", "kR9$mZ2p!vB7xL", "--breach-check"])
+
+    assert result.exit_code == 0
+    assert "not found in any known breach" in result.output
+
+
+def test_check_password_without_breach_flag_never_calls_network(monkeypatch):
+    import sectoolkit.cli as cli_module
+
+    def fail_if_called(pw):
+        raise AssertionError("check_password_breach should not be called without --breach-check")
+
+    monkeypatch.setattr(cli_module, "check_password_breach", fail_if_called)
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["check-password", "--password", "somepassword"])
+
+    assert result.exit_code == 0
+
+
 def test_strings_command_prints_extracted_strings(tmp_path):
     binfile = tmp_path / "sample.bin"
     binfile.write_bytes(b"\x00\x01hello world\x00\x02testing123\x00")

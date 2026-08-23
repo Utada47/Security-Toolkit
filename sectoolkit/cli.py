@@ -12,6 +12,7 @@ from sectoolkit import macros  # noqa: F401 - triggers check registration
 from sectoolkit.hashing import hash_file_all, SUPPORTED_ALGORITHMS, hash_file
 from sectoolkit.crypto import encrypt_file, decrypt_file
 from sectoolkit.crack import crack_hash, count_lines
+from sectoolkit.password_strength import check_strength
 from sectoolkit.strings_extract import extract_strings, find_urls_and_ips
 from sectoolkit.analyze import analyze_file, suggest_commands
 
@@ -210,6 +211,27 @@ def metadata_cmd(filepath):
 
     for key, value in data.items():
         click.echo(f"{key}: {value}")
+
+
+@cli.command(name="check-password")
+@click.option("--password", prompt=True, hide_input=True, help="Password to check (prompted securely if omitted).")
+def check_password(password):
+    """Check a password's strength (pattern analysis + entropy estimate).
+
+    Prompts for the password with hidden input if not piped/scripted, so
+    it doesn't end up in your shell history.
+    """
+    result = check_strength(password)
+
+    click.echo(f"Rating: {result['rating']}")
+    click.echo(f"Estimated entropy: {result['entropy_bits']} bits")
+
+    if result["issues"]:
+        click.echo("Issues found:")
+        for issue in result["issues"]:
+            click.echo(f"  - {issue}")
+    else:
+        click.echo("No issues found.")
 
 
 if __name__ == "__main__":

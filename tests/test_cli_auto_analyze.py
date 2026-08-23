@@ -127,6 +127,23 @@ def test_metadata_command_rejects_unsupported_file(tmp_path):
     assert "not a recognized image or PDF" in result.output
 
 
+def test_check_password_command_reports_weak_password():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["check-password", "--password", "123456"])
+
+    assert result.exit_code == 0
+    assert "very weak" in result.output
+
+
+def test_check_password_command_reports_strong_password():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["check-password", "--password", "kR9$mZ2p!vB7xL"])
+
+    assert result.exit_code == 0
+    assert "strong" in result.output
+    assert "No issues found" in result.output
+
+
 def test_strings_command_prints_extracted_strings(tmp_path):
     binfile = tmp_path / "sample.bin"
     binfile.write_bytes(b"\x00\x01hello world\x00\x02testing123\x00")

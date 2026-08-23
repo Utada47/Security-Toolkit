@@ -13,6 +13,7 @@ from sectoolkit.hashing import hash_file_all, SUPPORTED_ALGORITHMS, hash_file
 from sectoolkit.crypto import encrypt_file, decrypt_file
 from sectoolkit.crack import crack_hash, count_lines
 from sectoolkit.password_strength import check_strength
+from sectoolkit.password_generator import generate_password
 from sectoolkit.strings_extract import extract_strings, find_urls_and_ips
 from sectoolkit.analyze import analyze_file, suggest_commands
 
@@ -232,6 +233,29 @@ def check_password(password):
             click.echo(f"  - {issue}")
     else:
         click.echo("No issues found.")
+
+
+@cli.command(name="generate-password")
+@click.option("--length", "-l", default=16, show_default=True, help="Password length.")
+@click.option("--no-lowercase", is_flag=True, help="Exclude lowercase letters.")
+@click.option("--no-uppercase", is_flag=True, help="Exclude uppercase letters.")
+@click.option("--no-digits", is_flag=True, help="Exclude digits.")
+@click.option("--no-symbols", is_flag=True, help="Exclude symbols.")
+@click.option("--count", "-c", default=1, show_default=True, help="Number of passwords to generate.")
+def generate_password_cmd(length, no_lowercase, no_uppercase, no_digits, no_symbols, count):
+    """Generate one or more cryptographically secure random passwords."""
+    try:
+        for _ in range(count):
+            pw = generate_password(
+                length=length,
+                use_lowercase=not no_lowercase,
+                use_uppercase=not no_uppercase,
+                use_digits=not no_digits,
+                use_symbols=not no_symbols,
+            )
+            click.echo(pw)
+    except ValueError as exc:
+        raise click.ClickException(str(exc))
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ from sectoolkit.password_generator import generate_password
 from sectoolkit.breach_check import check_password_breach
 from sectoolkit.dns_lookup import resolve_hostname, reverse_lookup
 from sectoolkit.tls_check import get_certificate_info
+from sectoolkit.port_scanner import scan_ports, scan_common_ports, COMMON_PORTS
 from sectoolkit.strings_extract import extract_strings, find_urls_and_ips
 from sectoolkit.analyze import analyze_file, suggest_commands
 
@@ -335,6 +336,42 @@ def cert_check(hostname, port):
 
     if result["subject_alt_names"]:
         click.echo(f"Covers hostnames: {', '.join(result['subject_alt_names'])}")
+
+
+@cli.command(name="port-scan")
+@click.argument("host")
+@click.option("--ports", help="Comma-separated ports or ranges, e.g. '22,80,443' or '1-1024'. Defaults to common ports.")
+@click.option("--timeout", default=1.0, show_default=True, help="Connection timeout per port, in seconds.")
+def port_scan(host, ports, timeout):
+    """Scan a host's TCP ports to see which are open.
+
+    \b
+    Only scan hosts you own or are explicitly authorized to test.
+    """
+    if ports:
+        port_list = []
+        for chunk in ports.split(","):
+            chunk = chunk.strip()
+            if "-" in chunk:
+                start, end = chunk.split("-")
+                port_list.extend(range(int(start), int(end) + 1))
+            else:
+                port_list.append(int(chunk))
+
+        click.echo(f"Scanning {len(port_list)} port(s) on {host}...")
+        results = scan_ports(host, port_list, timeout=timeout)
+        open_ports = {p: COMMON_PORTS.get(p, "unknown") for p, is_open in sorted(results.items()) if is_open}
+    else:
+        click.echo(f"Scanning common ports on {host}...")
+        open_ports = scan_common_ports(host, timeout=timeout)
+
+    if not open_ports:
+        click.echo("No open ports found.")
+        return
+
+    click.echo(f"\nOpen ports on {host}:")
+    for port, service in open_ports.items():
+        click.echo(f"  {port}/tcp  {service}")
 
 
 if __name__ == "__main__":

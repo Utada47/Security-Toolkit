@@ -121,6 +121,37 @@ Uses Python's `secrets` module (cryptographically secure), not `random`.
 Guarantees at least one character from each enabled class, then shuffles
 so the guaranteed characters aren't predictably placed.
 
+### DNS lookup
+
+```bash
+sectoolkit dns example.com      # forward lookup
+sectoolkit dns 93.184.216.34    # reverse lookup (auto-detected)
+```
+
+### SSL/TLS certificate check
+
+```bash
+sectoolkit cert-check example.com
+sectoolkit cert-check example.com --port 8443
+```
+
+Shows the certificate's subject, issuer, validity dates, and covered
+hostnames (SANs). Warns if the certificate has expired or expires within
+14 days.
+
+### Port scan
+
+```bash
+sectoolkit port-scan 192.168.1.1                    # common ports
+sectoolkit port-scan 192.168.1.1 --ports 1-1024      # a range
+sectoolkit port-scan 192.168.1.1 --ports 22,80,443   # specific ports
+```
+
+**Only scan hosts you own or are explicitly authorized to test** —
+scanning systems without authorization may be illegal depending on your
+jurisdiction. Scans run concurrently (default: 50 workers) so even a full
+1-1024 range completes quickly against a responsive host.
+
 ### Crack a hash (dictionary attack)
 
 ```bash

@@ -35,19 +35,33 @@ def open_port():
     thread.join(timeout=1)
 
 
+@pytest.fixture
+def closed_port():
+    """Ask the OS for a genuinely free port, then release it immediately.
+
+    We deliberately do NOT use 'open_port + 1' as a stand-in for a closed
+    port: on Windows, high ephemeral ports (49152+) can be silently
+    reserved by Hyper-V/WSL for NAT port-forwarding, so an adjacent port
+    number is not reliably closed there. Asking the OS directly for a free
+    port (and releasing it right before the test) is portable and avoids
+    that flakiness.
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    return port
+
+
 def test_scan_port_detects_open_port(open_port):
     assert scan_port("127.0.0.1", open_port, timeout=1) is True
 
 
-def test_scan_port_detects_closed_port(open_port):
-    # A port right next to the open one that nothing is listening on.
-    closed_port = open_port + 1 if open_port < 65535 else open_port - 1
+def test_scan_port_detects_closed_port(closed_port):
     assert scan_port("127.0.0.1", closed_port, timeout=0.5) is False
 
 
-def test_scan_ports_returns_correct_status_for_each_port(open_port):
-    closed_port = open_port + 1 if open_port < 65535 else open_port - 1
-
+def test_scan_ports_returns_correct_status_for_each_port(open_port, closed_port):
     results = scan_ports("127.0.0.1", [open_port, closed_port], timeout=0.5)
 
     assert results[open_port] is True

@@ -16,6 +16,7 @@ from sectoolkit.password_strength import check_strength
 from sectoolkit.password_generator import generate_password
 from sectoolkit.breach_check import check_password_breach
 from sectoolkit.dns_lookup import resolve_hostname, reverse_lookup
+from sectoolkit.tls_check import get_certificate_info
 from sectoolkit.strings_extract import extract_strings, find_urls_and_ips
 from sectoolkit.analyze import analyze_file, suggest_commands
 
@@ -307,6 +308,33 @@ def dns_command(target):
                 click.echo(f"  {addr}")
         else:
             click.echo(f"Could not resolve {target}: {result.get('error', 'unknown error')}")
+
+
+@cli.command(name="cert-check")
+@click.argument("hostname")
+@click.option("--port", default=443, show_default=True, help="Port to connect to.")
+def cert_check(hostname, port):
+    """Inspect a host's SSL/TLS certificate (issuer, expiry, alt names)."""
+    result = get_certificate_info(hostname, port=port)
+
+    if "error" in result:
+        raise click.ClickException(f"Could not retrieve certificate: {result['error']}")
+
+    click.echo(f"Host: {result['hostname']}")
+    click.echo(f"Subject CN: {result['subject_common_name']}")
+    click.echo(f"Issuer: {result['issuer']}")
+    click.echo(f"Valid from: {result['not_before']}")
+    click.echo(f"Valid until: {result['not_after']}")
+
+    if result["is_expired"]:
+        click.echo("⚠ Certificate has EXPIRED.")
+    elif result["days_until_expiry"] < 14:
+        click.echo(f"⚠ Certificate expires soon: {result['days_until_expiry']} days remaining.")
+    else:
+        click.echo(f"Days until expiry: {result['days_until_expiry']}")
+
+    if result["subject_alt_names"]:
+        click.echo(f"Covers hostnames: {', '.join(result['subject_alt_names'])}")
 
 
 if __name__ == "__main__":

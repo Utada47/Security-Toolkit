@@ -358,3 +358,63 @@ def test_cert_check_command_reports_connection_errors(monkeypatch):
 
     assert result.exit_code != 0
     assert "Connection refused" in result.output
+
+
+def test_port_scan_command_default_scans_common_ports(monkeypatch):
+    import sectoolkit.cli as cli_module
+
+    monkeypatch.setattr(
+        cli_module, "scan_common_ports", lambda host, timeout=1.0: {22: "SSH", 443: "HTTPS"}
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["port-scan", "example.com"])
+
+    assert result.exit_code == 0
+    assert "22/tcp" in result.output
+    assert "SSH" in result.output
+    assert "443/tcp" in result.output
+
+
+def test_port_scan_command_with_explicit_port_list(monkeypatch):
+    import sectoolkit.cli as cli_module
+
+    monkeypatch.setattr(
+        cli_module, "scan_ports", lambda host, ports, timeout=1.0: {p: (p == 22) for p in ports}
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["port-scan", "example.com", "--ports", "22,80"])
+
+    assert result.exit_code == 0
+    assert "22/tcp" in result.output
+    assert "80/tcp" not in result.output
+
+
+def test_port_scan_command_with_port_range(monkeypatch):
+    import sectoolkit.cli as cli_module
+
+    captured = {}
+
+    def fake_scan_ports(host, ports, timeout=1.0):
+        captured["ports"] = ports
+        return {}
+
+    monkeypatch.setattr(cli_module, "scan_ports", fake_scan_ports)
+
+    runner = CliRunner()
+    runner.invoke(cli, ["port-scan", "example.com", "--ports", "20-25"])
+
+    assert captured["ports"] == [20, 21, 22, 23, 24, 25]
+
+
+def test_port_scan_command_reports_no_open_ports(monkeypatch):
+    import sectoolkit.cli as cli_module
+
+    monkeypatch.setattr(cli_module, "scan_common_ports", lambda host, timeout=1.0: {})
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["port-scan", "example.com"])
+
+    assert result.exit_code == 0
+    assert "No open ports found" in result.output

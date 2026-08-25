@@ -15,6 +15,7 @@ from sectoolkit.crack import crack_hash, count_lines
 from sectoolkit.password_strength import check_strength
 from sectoolkit.password_generator import generate_password
 from sectoolkit.breach_check import check_password_breach
+from sectoolkit.dns_lookup import resolve_hostname, reverse_lookup
 from sectoolkit.strings_extract import extract_strings, find_urls_and_ips
 from sectoolkit.analyze import analyze_file, suggest_commands
 
@@ -274,6 +275,38 @@ def generate_password_cmd(length, no_lowercase, no_uppercase, no_digits, no_symb
             click.echo(pw)
     except ValueError as exc:
         raise click.ClickException(str(exc))
+
+
+@cli.command(name="dns")
+@click.argument("target")
+def dns_command(target):
+    """Look up DNS records for a hostname, or reverse-lookup an IP address.
+
+    Automatically detects whether TARGET looks like an IP address or a
+    hostname and does the right kind of lookup.
+    """
+    import ipaddress
+
+    try:
+        ipaddress.ip_address(target)
+        is_ip = True
+    except ValueError:
+        is_ip = False
+
+    if is_ip:
+        result = reverse_lookup(target)
+        if result.get("hostname"):
+            click.echo(f"{target} -> {result['hostname']}")
+        else:
+            click.echo(f"No PTR record found for {target} ({result.get('error', 'unknown')})")
+    else:
+        result = resolve_hostname(target)
+        if result["addresses"]:
+            click.echo(f"{target} resolves to:")
+            for addr in result["addresses"]:
+                click.echo(f"  {addr}")
+        else:
+            click.echo(f"Could not resolve {target}: {result.get('error', 'unknown error')}")
 
 
 if __name__ == "__main__":

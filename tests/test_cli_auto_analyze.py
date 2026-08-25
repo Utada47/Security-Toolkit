@@ -247,3 +247,47 @@ def test_subcommand_name_takes_priority_over_same_named_file(tmp_path, monkeypat
     result = runner.invoke(cli, ["hash"])
 
     assert "Missing argument" in result.output or "FILEPATH" in result.output
+
+
+def test_dns_command_resolves_hostname(monkeypatch):
+    import sectoolkit.cli as cli_module
+
+    monkeypatch.setattr(
+        cli_module, "resolve_hostname", lambda h: {"hostname": h, "addresses": ["93.184.216.34"]}
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["dns", "example.com"])
+
+    assert result.exit_code == 0
+    assert "93.184.216.34" in result.output
+
+
+def test_dns_command_detects_ip_and_does_reverse_lookup(monkeypatch):
+    import sectoolkit.cli as cli_module
+
+    monkeypatch.setattr(
+        cli_module, "reverse_lookup", lambda ip: {"ip": ip, "hostname": "example.com"}
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["dns", "93.184.216.34"])
+
+    assert result.exit_code == 0
+    assert "example.com" in result.output
+
+
+def test_dns_command_reports_unresolvable_hostname(monkeypatch):
+    import sectoolkit.cli as cli_module
+
+    monkeypatch.setattr(
+        cli_module,
+        "resolve_hostname",
+        lambda h: {"hostname": h, "addresses": [], "error": "Name or service not known"},
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["dns", "nope.invalid"])
+
+    assert result.exit_code == 0
+    assert "Could not resolve" in result.output

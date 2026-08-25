@@ -291,3 +291,70 @@ def test_dns_command_reports_unresolvable_hostname(monkeypatch):
 
     assert result.exit_code == 0
     assert "Could not resolve" in result.output
+
+
+def test_cert_check_command_shows_certificate_details(monkeypatch):
+    import sectoolkit.cli as cli_module
+
+    monkeypatch.setattr(
+        cli_module,
+        "get_certificate_info",
+        lambda hostname, port=443: {
+            "hostname": hostname,
+            "subject_common_name": hostname,
+            "issuer": "Test CA",
+            "not_before": "2026-01-01T00:00:00+00:00",
+            "not_after": "2026-12-31T00:00:00+00:00",
+            "is_expired": False,
+            "days_until_expiry": 100,
+            "subject_alt_names": [hostname],
+        },
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cert-check", "example.com"])
+
+    assert result.exit_code == 0
+    assert "Test CA" in result.output
+    assert "100" in result.output
+
+
+def test_cert_check_command_warns_on_expired_certificate(monkeypatch):
+    import sectoolkit.cli as cli_module
+
+    monkeypatch.setattr(
+        cli_module,
+        "get_certificate_info",
+        lambda hostname, port=443: {
+            "hostname": hostname,
+            "subject_common_name": hostname,
+            "issuer": "Test CA",
+            "not_before": "2020-01-01T00:00:00+00:00",
+            "not_after": "2021-01-01T00:00:00+00:00",
+            "is_expired": True,
+            "days_until_expiry": -1500,
+            "subject_alt_names": [hostname],
+        },
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cert-check", "example.com"])
+
+    assert result.exit_code == 0
+    assert "EXPIRED" in result.output
+
+
+def test_cert_check_command_reports_connection_errors(monkeypatch):
+    import sectoolkit.cli as cli_module
+
+    monkeypatch.setattr(
+        cli_module,
+        "get_certificate_info",
+        lambda hostname, port=443: {"hostname": hostname, "error": "Connection refused"},
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["cert-check", "unreachable.invalid"])
+
+    assert result.exit_code != 0
+    assert "Connection refused" in result.output

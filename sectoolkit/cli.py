@@ -22,6 +22,7 @@ from sectoolkit.strings_extract import extract_strings, find_urls_and_ips
 from sectoolkit.analyze import analyze_file, suggest_commands
 from sectoolkit.log_analysis import analyze_log_file, detect_brute_force, get_default_patterns
 from sectoolkit.web_security import check_security_headers, check_http_redirect
+from sectoolkit.vuln_scanner import run_vulnerability_scan
 
 
 class AutoAnalyzeGroup(click.Group):
@@ -465,6 +466,65 @@ def web_security(hostname, port, check_http):
             click.echo(f"  ✓ HTTP redirects to HTTPS (status: {redirect_result['status_code']})")
         else:
             click.echo(f"  ✗ HTTP does not redirect to HTTPS")
+
+
+@cli.command(name="vuln-scan")
+@click.argument("hostname")
+@click.option("--ports", help="Comma-separated ports to scan, e.g. '21,22,80,443'. Defaults to common ports.")
+@click.option("--json", "as_json", is_flag=True, help="Output the report as JSON.")
+def vuln_scan(hostname, ports, as_json):
+    """Run a basic vulnerability scan on a target host.
+    
+    \b
+    IMPORTANT: Only scan hosts you own or have explicit authorization to test.
+    Unauthorized scanning may be illegal.
+    
+    Checks for:
+    - Open ports and risky services
+    - SSL/TLS vulnerabilities
+    - Common sensitive paths
+    """
+    if ports:
+        port_list = [int(p.strip()) for p in ports.split(",")]
+    else:
+        port_list = [21, 22, 23, 25, 80, 443, 3306, 3389, 5432, 8080]
+    
+    click.echo(f"Scanning {hostname}...\n")
+    result = run_vulnerability_scan(hostname, ports=port_list)
+    
+    if as_json:
+        import json
+        click.echo(json.dumps(result, indent=2, default=str))
+        return
+    
+    click.echo(f"[Scan Summary]")
+    click.echo(f"Target: {result['hostname']}")
+    click.echo(f"Timestamp: {result['timestamp']}")
+    click.echo(f"Risk Level: {result['risk_level'].upper()}\n")
+    
+    click.echo(f"[Port Scan Results]")
+    if result["port_scan"]["open_ports"]:
+        click.echo(f"Open ports: {', '.join(map(str, result['port_scan']['open_ports']))}")
+    else:
+        click.echo("No open ports found")
+    
+    if result["port_scan"]["risky_ports"]:
+        click.echo("\n[Risky Services Detected]")
+        for risky in result["port_scan"]["risky_ports"]:
+            click.echo(f"  ⚠ Port {risky['port']}: {risky['risk']}")
+    
+    if result.get("ssl_check") and result["ssl_check"].get("issues"):
+        click.echo("\n[SSL/TLS Issues]")
+        for issue in result["ssl_check"]["issues"]:
+            click.echo(f"  ⚠ {issue}")
+        if result["ssl_check"].get("info"):
+            click.echo(f"\n  Protocol: {result['ssl_check']['info'].get('protocol', 'unknown')}")
+            click.echo(f"  Cipher: {result['ssl_check']['info'].get('cipher', 'unknown')}")
+    
+    if result.get("path_check") and result["path_check"].get("potentially_sensitive"):
+        click.echo("\n[Potentially Sensitive Paths]")
+        for path in result["path_check"]["potentially_sensitive"]:
+            click.echo(f"  ⚠ {path}")
 
 
 if __name__ == "__main__":

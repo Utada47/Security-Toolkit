@@ -23,6 +23,7 @@ from sectoolkit.analyze import analyze_file, suggest_commands
 from sectoolkit.log_analysis import analyze_log_file, detect_brute_force, get_default_patterns
 from sectoolkit.web_security import check_security_headers, check_http_redirect
 from sectoolkit.vuln_scanner import run_vulnerability_scan
+from sectoolkit.hash_verify import verify_file_hash, batch_verify_hashes, parse_checksum_file
 
 
 class AutoAnalyzeGroup(click.Group):
@@ -525,6 +526,68 @@ def vuln_scan(hostname, ports, as_json):
         click.echo("\n[Potentially Sensitive Paths]")
         for path in result["path_check"]["potentially_sensitive"]:
             click.echo(f"  ⚠ {path}")
+
+
+@cli.command(name="verify-hash")
+@click.argument("filepath", type=click.Path(exists=True))
+@click.argument("expected_hash")
+@click.option("--algorithm", "-a", default="sha256", show_default=True, help="Hash algorithm to use.")
+def verify_hash(filepath, expected_hash, algorithm):
+    """Verify a file's hash against an expected value.
+    
+    Useful for checking file integrity after download or transfer.
+    """
+    result = verify_file_hash(filepath, expected_hash, algorithm)
+    
+    click.echo(f"File: {result['file']}")
+    click.echo(f"Algorithm: {result['algorithm'].upper()}")
+    click.echo(f"Expected: {result['expected']}")
+    click.echo(f"Actual:   {result['actual']}")
+    click.echo("")
+    
+    if result["verified"]:
+        click.echo("✓ VERIFIED - Hash matches!")
+    else:
+        click.echo("✗ MISMATCH - Hash does not match!")
+        raise click.Exit(1)
+
+
+@cli.command(name="verify-checksums")
+@click.argument("checksum_file", type=click.Path(exists=True))
+@click.option("--algorithm", "-a", default="sha256", show_default=True, help="Hash algorithm to use.")
+def verify_checksums(checksum_file, algorithm):
+    """Verify multiple files using a checksum file.
+    
+    Checksum file format: <hash>  <filepath>
+    Lines starting with # are treated as comments.
+    """
+    try:
+        with open(checksum_file, 'r') as f:
+            content = f.read()
+    except Exception as e:
+        raise click.ClickException(f"Could not read checksum file: {e}")
+    
+    checksums = parse_checksum_file(content)
+    
+    if not checksums:
+        click.echo("No checksums found in file.")
+        return
+    
+    click.echo(f"Verifying {len(checksums)} file(s)...\n")
+    
+    files_and_hashes = [(filepath, hash_val, algorithm) for hash_val, filepath in checksums]
+    result = batch_verify_hashes(files_and_hashes)
+    
+    click.echo(f"Results: {result['passed']} passed, {result['failed']} failed\n")
+    
+    if result["failed"] == 0:
+        click.echo("✓ All files verified successfully!")
+    else:
+        click.echo("✗ Some files failed verification:")
+        for detail in result["details"]:
+            if not detail.get("verified"):
+                click.echo(f"  {detail.get('file', 'unknown')}: MISMATCH")
+        raise click.Exit(1)
 
 
 if __name__ == "__main__":

@@ -311,5 +311,10 @@ tests/          # pytest test suite
 - [x] Web security: HTTP security headers checker, HTTPS redirect validation
 - [x] Vulnerability scanning: basic port scan, SSL/TLS checks, sensitive path detection
 - [x] Packet analysis: IPv4/TCP/UDP parsing, port scan detection, traffic analysis
+- [x] Hash verification: file integrity checking, checksum validation
+- [x] Certificate chain validation: expiry checks, pinning, chain integrity
+- [x] Domain information: WHOIS, DNS propagation, subdomain takeover detection
+- [x] Service banners: grabbing, fingerprinting, version detection
+- [x] Network utilities: IP/CIDR calculations, subnet operations, private IP detection
 - [ ] Threat intelligence integration
 - [ ] Reporting and export features

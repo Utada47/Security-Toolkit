@@ -24,6 +24,7 @@ def analyze_log_file(filepath: str, patterns: Dict[str, str] = None) -> Dict[str
         "ip_addresses": Counter(),
         "status_codes": Counter(),
         "suspicious_activity": [],
+        "timestamps": [],
     }
     
     for pattern_name in patterns:
@@ -31,6 +32,7 @@ def analyze_log_file(filepath: str, patterns: Dict[str, str] = None) -> Dict[str
     
     ip_pattern = re.compile(r'\b(?:\d{1,3}\.){3}\d{1,3}\b')
     status_pattern = re.compile(r'\s(2\d{2}|3\d{2}|4\d{2}|5\d{2})\s')
+    timestamp_pattern = re.compile(r'\d{4}-\d{2}-\d{2}[\sT]\d{2}:\d{2}:\d{2}')
     
     with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
         for line_num, line in enumerate(f, 1):
@@ -50,6 +52,10 @@ def analyze_log_file(filepath: str, patterns: Dict[str, str] = None) -> Dict[str
             status_match = status_pattern.search(line)
             if status_match:
                 results["status_codes"][status_match.group(1)] += 1
+            
+            timestamp_match = timestamp_pattern.search(line)
+            if timestamp_match:
+                results["timestamps"].append(timestamp_match.group())
     
     results["top_ips"] = results["ip_addresses"].most_common(10)
     results["failed_login_count"] = len(results["matches"].get("failed_login", []))

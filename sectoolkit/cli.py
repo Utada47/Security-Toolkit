@@ -21,6 +21,7 @@ from sectoolkit.port_scanner import scan_ports, scan_common_ports, COMMON_PORTS
 from sectoolkit.strings_extract import extract_strings, find_urls_and_ips
 from sectoolkit.analyze import analyze_file, suggest_commands
 from sectoolkit.log_analysis import analyze_log_file, detect_brute_force, get_default_patterns
+from sectoolkit.web_security import check_security_headers, check_http_redirect
 
 
 class AutoAnalyzeGroup(click.Group):
@@ -424,6 +425,46 @@ def log_analyze(logfile, as_json, brute_force_threshold):
         click.echo("\n[Potential Brute Force Attacks]")
         for ip_info in suspicious_ips:
             click.echo(f"  ⚠ {ip_info}")
+
+
+@cli.command(name="web-security")
+@click.argument("hostname")
+@click.option("--port", default=443, show_default=True, help="Port to connect to.")
+@click.option("--check-http", is_flag=True, help="Also check if HTTP (port 80) redirects to HTTPS.")
+def web_security(hostname, port, check_http):
+    """Check web server security headers and configurations.
+    
+    Analyzes HTTP security headers like HSTS, CSP, X-Frame-Options, and more.
+    """
+    click.echo(f"Checking security headers for {hostname}:{port}...\n")
+    
+    result = check_security_headers(hostname, port=port)
+    
+    if "error" in result:
+        raise click.ClickException(f"Could not connect: {result['error']}")
+    
+    click.echo(f"Security Score: {result['security_score']:.1f}%\n")
+    
+    if result["headers_found"]:
+        click.echo("[Security Headers Found]")
+        for header, value in result["headers_found"].items():
+            click.echo(f"  ✓ {header}: {value}")
+    
+    if result["missing_headers"]:
+        click.echo("\n[Missing Security Headers]")
+        for header in result["missing_headers"]:
+            click.echo(f"  ✗ {header}")
+    
+    if check_http:
+        click.echo("\n[HTTP to HTTPS Redirect Check]")
+        redirect_result = check_http_redirect(hostname, port=80)
+        
+        if "error" in redirect_result:
+            click.echo(f"  Could not check HTTP redirect: {redirect_result['error']}")
+        elif redirect_result["redirects_to_https"]:
+            click.echo(f"  ✓ HTTP redirects to HTTPS (status: {redirect_result['status_code']})")
+        else:
+            click.echo(f"  ✗ HTTP does not redirect to HTTPS")
 
 
 if __name__ == "__main__":

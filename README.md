@@ -152,6 +152,47 @@ scanning systems without authorization may be illegal depending on your
 jurisdiction. Scans run concurrently (default: 50 workers) so even a full
 1-1024 range completes quickly against a responsive host.
 
+### Log analysis
+
+```bash
+sectoolkit log-analyze access.log
+sectoolkit log-analyze error.log --json
+sectoolkit log-analyze server.log --brute-force-threshold 50
+```
+
+Analyzes log files for suspicious patterns including failed login attempts,
+SQL injection attempts, XSS patterns, directory traversal, and potential
+brute force attacks. Tracks IP addresses, status codes, and provides
+summary statistics.
+
+### Web security headers check
+
+```bash
+sectoolkit web-security example.com
+sectoolkit web-security example.com --check-http
+sectoolkit web-security example.com --port 8443
+```
+
+Checks for security headers like HSTS, CSP, X-Frame-Options,
+X-Content-Type-Options, and more. Provides a security score and highlights
+missing headers. The `--check-http` flag also verifies if HTTP redirects to
+HTTPS.
+
+### Vulnerability scanning
+
+```bash
+sectoolkit vuln-scan example.com
+sectoolkit vuln-scan 192.168.1.1 --ports 21,22,80,443
+sectoolkit vuln-scan target.local --json
+```
+
+**Only scan hosts you own or have explicit authorization to test.** Runs a
+basic vulnerability assessment including:
+- Port scanning for risky services (FTP, Telnet, database ports)
+- SSL/TLS configuration checks
+- Common sensitive path detection (.git, .env, admin panels)
+- Risk level assessment
+
 ### Crack a hash (dictionary attack)
 
 ```bash
@@ -266,4 +307,9 @@ tests/          # pytest test suite
 - [x] File metadata extraction (EXIF, PDF metadata, Office macro detection)
 - [x] Password security: strength checker, breach check (HaveIBeenPwned), secure generator
 - [x] Network diagnostics: port scanner, DNS lookup, SSL/TLS certificate checker
-- [ ] Log analysis: suspicious pattern detection
+- [x] Log analysis: suspicious pattern detection (failed logins, SQL injection, XSS, brute force)
+- [x] Web security: HTTP security headers checker, HTTPS redirect validation
+- [x] Vulnerability scanning: basic port scan, SSL/TLS checks, sensitive path detection
+- [x] Packet analysis: IPv4/TCP/UDP parsing, port scan detection, traffic analysis
+- [ ] Threat intelligence integration
+- [ ] Reporting and export features

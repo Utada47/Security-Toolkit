@@ -20,6 +20,7 @@ from sectoolkit.tls_check import get_certificate_info
 from sectoolkit.port_scanner import scan_ports, scan_common_ports, COMMON_PORTS
 from sectoolkit.strings_extract import extract_strings, find_urls_and_ips
 from sectoolkit.analyze import analyze_file, suggest_commands
+from sectoolkit.log_analysis import analyze_log_file, detect_brute_force, get_default_patterns
 
 
 class AutoAnalyzeGroup(click.Group):
@@ -372,6 +373,57 @@ def port_scan(host, ports, timeout):
     click.echo(f"\nOpen ports on {host}:")
     for port, service in open_ports.items():
         click.echo(f"  {port}/tcp  {service}")
+
+
+@cli.command(name="log-analyze")
+@click.argument("logfile", type=click.Path(exists=True))
+@click.option("--json", "as_json", is_flag=True, help="Output the report as JSON instead of plain text.")
+@click.option("--brute-force-threshold", default=100, show_default=True, help="Threshold for detecting brute force attempts.")
+def log_analyze(logfile, as_json, brute_force_threshold):
+    """Analyze a log file for suspicious patterns and activity.
+
+    Detects failed logins, SQL injection attempts, XSS patterns, directory
+    traversal, and potential brute force attacks.
+    """
+    result = analyze_log_file(logfile)
+    
+    if as_json:
+        import json
+        result["top_ips"] = [{"ip": ip, "count": count} for ip, count in result["top_ips"]]
+        click.echo(json.dumps(result, indent=2, default=str))
+        return
+    
+    click.echo(f"Analyzing: {logfile}\n")
+    click.echo(f"Total lines: {result['total_lines']}")
+    click.echo(f"Unique IP addresses: {len(result['ip_addresses'])}\n")
+    
+    click.echo("[Failed Login Attempts]")
+    click.echo(f"  Count: {result['failed_login_count']}")
+    if result['failed_login_count'] > 0 and result['failed_login_count'] <= 5:
+        for match in result['matches']['failed_login'][:5]:
+            click.echo(f"    Line {match['line']}: {match['content']}")
+    
+    click.echo("\n[SQL Injection Attempts]")
+    click.echo(f"  Count: {result['sql_injection_count']}")
+    if result['sql_injection_count'] > 0 and result['sql_injection_count'] <= 3:
+        for match in result['matches']['sql_injection'][:3]:
+            click.echo(f"    Line {match['line']}: {match['content']}")
+    
+    click.echo("\n[XSS Attempts]")
+    click.echo(f"  Count: {result['xss_attempt_count']}")
+    if result['xss_attempt_count'] > 0 and result['xss_attempt_count'] <= 3:
+        for match in result['matches']['xss_attempt'][:3]:
+            click.echo(f"    Line {match['line']}: {match['content']}")
+    
+    click.echo("\n[Top IP Addresses]")
+    for ip, count in result['top_ips'][:5]:
+        click.echo(f"  {ip}: {count} requests")
+    
+    suspicious_ips = detect_brute_force(result['ip_addresses'], threshold=brute_force_threshold)
+    if suspicious_ips:
+        click.echo("\n[Potential Brute Force Attacks]")
+        for ip_info in suspicious_ips:
+            click.echo(f"  ⚠ {ip_info}")
 
 
 if __name__ == "__main__":

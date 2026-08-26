@@ -1,6 +1,7 @@
 """Basic vulnerability scanner for common web vulnerabilities."""
 import socket
 import ssl
+import re
 from typing import Dict, List, Any
 from urllib.parse import urlparse
 
@@ -182,3 +183,54 @@ def run_vulnerability_scan(hostname: str, ports: List[int] = None) -> Dict[str, 
         results["risk_level"] = "medium"
     
     return results
+
+
+def check_http_methods(hostname: str, port: int = 80, use_https: bool = False) -> Dict[str, Any]:
+    """Check for unsafe HTTP methods enabled on a server.
+    
+    Args:
+        hostname: Target hostname
+        port: Port to connect to
+        use_https: Whether to use HTTPS
+        
+    Returns:
+        Dict containing HTTP methods information
+    """
+    result = {
+        "hostname": hostname,
+        "port": port,
+        "allowed_methods": [],
+        "unsafe_methods": [],
+        "warnings": [],
+    }
+    
+    unsafe = ["PUT", "DELETE", "TRACE", "CONNECT"]
+    
+    try:
+        if use_https:
+            context = ssl.create_default_context()
+            with socket.create_connection((hostname, port), timeout=5) as sock:
+                with context.wrap_socket(sock, server_hostname=hostname) as ssock:
+                    request = f"OPTIONS / HTTP/1.1\r\nHost: {hostname}\r\nConnection: close\r\n\r\n"
+                    ssock.sendall(request.encode())
+                    response = ssock.recv(2048).decode('utf-8', errors='ignore')
+        else:
+            with socket.create_connection((hostname, port), timeout=5) as sock:
+                request = f"OPTIONS / HTTP/1.1\r\nHost: {hostname}\r\nConnection: close\r\n\r\n"
+                sock.sendall(request.encode())
+                response = sock.recv(2048).decode('utf-8', errors='ignore')
+        
+        allow_header = re.search(r'Allow:\s*(.+)', response, re.IGNORECASE)
+        if allow_header:
+            methods = [m.strip() for m in allow_header.group(1).split(',')]
+            result["allowed_methods"] = methods
+            
+            for method in methods:
+                if method.upper() in unsafe:
+                    result["unsafe_methods"].append(method.upper())
+                    result["warnings"].append(f"Unsafe method {method.upper()} is allowed")
+    
+    except Exception as e:
+        result["error"] = str(e)
+    
+    return result

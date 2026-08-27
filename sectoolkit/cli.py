@@ -27,6 +27,8 @@ from sectoolkit.hash_verify import verify_file_hash, batch_verify_hashes, parse_
 from sectoolkit.sqli_detector import detect_sqli_in_url, detect_sqli_in_string, batch_analyze_urls
 from sectoolkit.xss_detector import detect_xss_in_string, analyze_html_context
 from sectoolkit.jwt_analyzer import parse_jwt, analyze_jwt_security, verify_jwt_signature
+from sectoolkit.api_security import test_http_methods, check_rate_limiting, check_cors_policy
+from sectoolkit.hash_crack import analyze_hash_type, rainbow_table_lookup, estimate_crack_time, compare_hash_algorithms
 
 
 class AutoAnalyzeGroup(click.Group):
@@ -726,6 +728,115 @@ def jwt_analyze(token, verify, secret, output_json):
                 click.echo("\n✓ Signature is valid")
             else:
                 click.echo("\n✗ Signature is invalid")
+
+
+@cli.command(name="api-methods")
+@click.argument("url")
+@click.option("--json", "output_json", is_flag=True, help="Output in JSON format.")
+def api_methods(url, output_json):
+    """Test which HTTP methods are allowed on an API endpoint.
+    
+    Example:
+      sectoolkit api-methods "https://api.example.com/users"
+    """
+    import json
+    
+    result = test_http_methods(url)
+    
+    if output_json:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        click.echo(f"URL: {result['url']}\n")
+        
+        if result["allowed_methods"]:
+            click.echo(f"Allowed methods: {', '.join(result['allowed_methods'])}")
+        
+        if result["unsafe_methods"]:
+            click.echo(f"\n⚠ Unsafe methods enabled: {', '.join(result['unsafe_methods'])}")
+        
+        if result["forbidden_methods"]:
+            click.echo(f"Forbidden methods: {', '.join(result['forbidden_methods'])}")
+
+
+@cli.command(name="hash-analyze")
+@click.argument("hash_string")
+@click.option("--crack", is_flag=True, help="Attempt to crack using common values.")
+@click.option("--estimate-time", is_flag=True, help="Estimate brute force crack time.")
+@click.option("--length", default=8, help="Password length for time estimate.")
+@click.option("--json", "output_json", is_flag=True, help="Output in JSON format.")
+def hash_analyze(hash_string, crack, estimate_time, length, output_json):
+    """Analyze a hash to determine algorithm and check for weaknesses.
+    
+    Example:
+      sectoolkit hash-analyze "5d41402abc4b2a76b9719d911017c592" --crack
+    """
+    import json
+    
+    analysis = analyze_hash_type(hash_string)
+    
+    if crack:
+        crack_result = rainbow_table_lookup(hash_string)
+        analysis["crack_attempt"] = crack_result
+    
+    if estimate_time and analysis.get("likely_algorithms"):
+        algo = analysis["likely_algorithms"][0].lower()
+        analysis["crack_time"] = estimate_crack_time(algo, length)
+    
+    if output_json:
+        click.echo(json.dumps(analysis, indent=2))
+    else:
+        click.echo(f"Hash: {hash_string}")
+        click.echo(f"Length: {analysis['length']}")
+        click.echo(f"Likely algorithm(s): {', '.join(analysis['likely_algorithms'])}")
+        click.echo(f"Confidence: {analysis['confidence']}\n")
+        
+        if crack and analysis.get("crack_attempt"):
+            result = analysis["crack_attempt"]
+            if result["found"]:
+                click.echo(f"✓ CRACKED! Plaintext: {result['plaintext']}")
+                click.echo(f"Algorithm: {result['algorithm_used']}")
+            else:
+                click.echo("✗ Could not crack using common values")
+        
+        if estimate_time and analysis.get("crack_time"):
+            time_est = analysis["crack_time"]
+            click.echo(f"\nBrute force estimate ({length} char password, {time_est['complexity']} complexity):")
+            click.echo(f"Practical time: {time_est['estimate']['practical']}")
+
+
+@cli.command(name="cors-check")
+@click.argument("url")
+@click.option("--origin", default="https://evil.com", help="Origin to test.")
+@click.option("--json", "output_json", is_flag=True, help="Output in JSON format.")
+def cors_check(url, origin, output_json):
+    """Check CORS policy configuration on an endpoint.
+    
+    Example:
+      sectoolkit cors-check "https://api.example.com"
+    """
+    import json
+    
+    result = check_cors_policy(url, origin)
+    
+    if output_json:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        click.echo(f"URL: {result['url']}")
+        click.echo(f"Testing origin: {result['test_origin']}\n")
+        
+        if result["cors_enabled"]:
+            click.echo("✓ CORS is enabled")
+            click.echo(f"Allowed origins: {', '.join(result['allowed_origins'])}")
+            if result["allowed_methods"]:
+                click.echo(f"Allowed methods: {', '.join(result['allowed_methods'])}")
+            click.echo(f"Credentials allowed: {result['allows_credentials']}")
+            
+            if result["security_issues"]:
+                click.echo("\n⚠ Security Issues:")
+                for issue in result["security_issues"]:
+                    click.echo(f"  {issue}")
+        else:
+            click.echo("✓ CORS is not enabled or not detected")
 
 
 if __name__ == "__main__":

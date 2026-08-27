@@ -779,8 +779,11 @@ def hash_analyze(hash_string, crack, estimate_time, length, output_json):
         analysis["crack_attempt"] = crack_result
     
     if estimate_time and analysis.get("likely_algorithms"):
-        algo = analysis["likely_algorithms"][0].lower()
-        analysis["crack_time"] = estimate_crack_time(algo, length)
+        if analysis["likely_algorithms"]:
+            algo = analysis["likely_algorithms"][0].lower()
+            analysis["crack_time"] = estimate_crack_time(algo, length)
+        else:
+            analysis["crack_time"] = {"error": "Algorithm unknown"}
     
     if output_json:
         click.echo(json.dumps(analysis, indent=2))

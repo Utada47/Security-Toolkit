@@ -25,6 +25,8 @@ from sectoolkit.web_security import check_security_headers, check_http_redirect
 from sectoolkit.vuln_scanner import run_vulnerability_scan
 from sectoolkit.hash_verify import verify_file_hash, batch_verify_hashes, parse_checksum_file
 from sectoolkit.sqli_detector import detect_sqli_in_url, detect_sqli_in_string, batch_analyze_urls
+from sectoolkit.xss_detector import detect_xss_in_string, analyze_html_context
+from sectoolkit.jwt_analyzer import parse_jwt, analyze_jwt_security, verify_jwt_signature
 
 
 class AutoAnalyzeGroup(click.Group):
@@ -631,6 +633,99 @@ def sqli_check(target, type, output_json):
             click.echo(f"Suspicious: {result['is_suspicious']}")
             click.echo(f"Risk Level: {result['risk_level'].upper()}")
             click.echo(f"Patterns matched: {len(result['matched_patterns'])}")
+
+
+@cli.command(name="xss-check")
+@click.argument("input_string")
+@click.option("--type", "-t", type=click.Choice(["string", "html"]), default="string", show_default=True, help="Type of analysis.")
+@click.option("--json", "output_json", is_flag=True, help="Output in JSON format.")
+def xss_check(input_string, type, output_json):
+    """Check string or HTML content for XSS patterns.
+    
+    Examples:
+      sectoolkit xss-check "<script>alert('XSS')</script>"
+      sectoolkit xss-check "<img src=x onerror=alert(1)>"
+    """
+    import json
+    
+    if type == "html":
+        result = analyze_html_context(input_string)
+    else:
+        result = detect_xss_in_string(input_string)
+    
+    if output_json:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        if type == "string":
+            click.echo(f"Input: {result['input'][:100]}...")
+            click.echo(f"Suspicious: {result['is_suspicious']}")
+            click.echo(f"Risk Level: {result['risk_level'].upper()}")
+            click.echo(f"Patterns matched: {len(result['matched_patterns'])}")
+            
+            if result.get("decoded_input"):
+                click.echo(f"\nDecoded input detected: {result['decoded_input'][:100]}...")
+        else:
+            click.echo(f"Total <script> tags: {result['total_scripts']}")
+            click.echo(f"Inline event handlers: {result['inline_event_handlers']}")
+            click.echo(f"Risk Level: {result['risk_level'].upper()}")
+            
+            if result["suspicious_patterns"]:
+                click.echo("\n[Suspicious Patterns]")
+                for pattern in result["suspicious_patterns"]:
+                    click.echo(f"  ⚠ {pattern}")
+
+
+@cli.command(name="jwt-analyze")
+@click.argument("token")
+@click.option("--verify", is_flag=True, help="Verify signature (requires --secret).")
+@click.option("--secret", help="Secret key for signature verification.")
+@click.option("--json", "output_json", is_flag=True, help="Output in JSON format.")
+def jwt_analyze(token, verify, secret, output_json):
+    """Analyze JWT token for security issues.
+    
+    Example:
+      sectoolkit jwt-analyze "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    """
+    import json
+    
+    result = analyze_jwt_security(token)
+    
+    if verify and secret:
+        verified = verify_jwt_signature(token, secret)
+        result["signature_valid"] = verified
+    
+    if output_json:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        click.echo(f"[JWT Analysis]")
+        click.echo(f"Risk Level: {result['risk_level'].upper()}\n")
+        
+        if result.get("vulnerabilities"):
+            click.echo("[Vulnerabilities]")
+            for vuln in result["vulnerabilities"]:
+                click.echo(f"  ⚠ {vuln}")
+            click.echo("")
+        
+        if result.get("warnings"):
+            click.echo("[Warnings]")
+            for warn in result["warnings"]:
+                click.echo(f"  • {warn}")
+            click.echo("")
+        
+        if result.get("info"):
+            info = result["info"]
+            if info.get("header"):
+                click.echo(f"Algorithm: {info['header'].get('alg', 'unknown')}")
+            if info.get("ttl_seconds"):
+                click.echo(f"Time to expiration: {info['ttl_seconds']} seconds")
+            if info.get("expired"):
+                click.echo("Status: EXPIRED")
+        
+        if verify and secret:
+            if result.get("signature_valid"):
+                click.echo("\n✓ Signature is valid")
+            else:
+                click.echo("\n✗ Signature is invalid")
 
 
 if __name__ == "__main__":

@@ -122,7 +122,10 @@ def verify_jwt_signature(token: str, secret: str, algorithm: str = "HS256") -> b
         hmac.new(secret.encode(), message.encode(), hash_func).digest()
     ).decode().rstrip('=')
     
-    return hmac.compare_digest(signature, expected_sig)
+    try:
+        return hmac.compare_digest(signature, expected_sig)
+    except:
+        return False
 
 
 def brute_force_jwt_secret(token: str, wordlist: List[str], algorithm: str = "HS256") -> Optional[str]:

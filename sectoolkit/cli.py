@@ -24,6 +24,7 @@ from sectoolkit.log_analysis import analyze_log_file, detect_brute_force, get_de
 from sectoolkit.web_security import check_security_headers, check_http_redirect
 from sectoolkit.vuln_scanner import run_vulnerability_scan
 from sectoolkit.hash_verify import verify_file_hash, batch_verify_hashes, parse_checksum_file
+from sectoolkit.sqli_detector import detect_sqli_in_url, detect_sqli_in_string, batch_analyze_urls
 
 
 class AutoAnalyzeGroup(click.Group):
@@ -588,6 +589,48 @@ def verify_checksums(checksum_file, algorithm):
             if not detail.get("verified"):
                 click.echo(f"  {detail.get('file', 'unknown')}: MISMATCH")
         raise click.Exit(1)
+
+
+@cli.command(name="sqli-check")
+@click.argument("target")
+@click.option("--type", "-t", type=click.Choice(["url", "string"]), default="url", show_default=True, help="Type of input to check.")
+@click.option("--json", "output_json", is_flag=True, help="Output in JSON format.")
+def sqli_check(target, type, output_json):
+    """Check URL or string for SQL injection patterns.
+    
+    Examples:
+      sectoolkit sqli-check "http://example.com/search?q=test' OR 1=1--"
+      sectoolkit sqli-check "admin' OR '1'='1" --type string
+    """
+    import json
+    
+    if type == "url":
+        result = detect_sqli_in_url(target)
+    else:
+        result = detect_sqli_in_string(target)
+    
+    if output_json:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        if type == "url":
+            click.echo(f"URL: {result['url']}")
+            click.echo(f"Vulnerable: {result['is_vulnerable']}")
+            click.echo(f"Risk Level: {result['risk_level'].upper()}")
+            
+            if result["suspicious_params"]:
+                click.echo("\n[Suspicious Parameters]")
+                for param in result["suspicious_params"]:
+                    click.echo(f"  Parameter: {param['parameter']}")
+                    click.echo(f"  Value: {param['value']}")
+                    click.echo(f"  Risk: {param['risk'].upper()}")
+                    click.echo(f"  Patterns matched: {len(param['patterns'])}\n")
+            else:
+                click.echo("\nNo suspicious patterns detected.")
+        else:
+            click.echo(f"Input: {result['input']}")
+            click.echo(f"Suspicious: {result['is_suspicious']}")
+            click.echo(f"Risk Level: {result['risk_level'].upper()}")
+            click.echo(f"Patterns matched: {len(result['matched_patterns'])}")
 
 
 if __name__ == "__main__":

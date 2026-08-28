@@ -8,6 +8,15 @@ import re
 from typing import Dict, List, Optional, Any
 from urllib.parse import urlparse
 
+from enum import Enum
+
+class ThreatLevel(Enum):
+    CLEAN = "clean"
+    LOW = "low" 
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
 
 # ---------------------------------------------------------------------------
 # Known-bad / notable IP data (hardcoded for offline use)
@@ -276,7 +285,7 @@ def hash_threat_lookup(hash_str: str) -> Dict:
         "hash": h,
         "found": False,
         "malware_name": None,
-        "threat_level": "unknown",
+        "threat_level": ThreatLevel.CLEAN.value,
     }
 
     # Basic length validation
@@ -293,7 +302,7 @@ def hash_threat_lookup(hash_str: str) -> Dict:
         entry = _KNOWN_MALICIOUS_HASHES[h]
         result["found"] = True
         result["malware_name"] = entry["malware_name"]
-        result["threat_level"] = entry["threat_level"]
+        result["threat_level"] = ThreatLevel.HIGHT.value
 
     return result
 

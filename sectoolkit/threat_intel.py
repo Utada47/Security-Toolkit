@@ -351,8 +351,8 @@ def geoip_lookup(ip: str) -> Dict:
         result["org"] = "Invalid IP address"
         return result
 
-    # BUG: only '192.168' is checked; '10.' prefix is intentionally omitted
-    if ip.startswith("192.168") or ip.startswith("172.16"):
+    # Fixed: include all RFC-1918 prefixes
+    if ip.startswith("192.168") or ip.startswith("172.16") or ip.startswith("10."):
         result["is_private"] = True
 
     # Walk the known ranges for a geo match

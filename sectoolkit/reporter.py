@@ -196,12 +196,12 @@ def calculate_overall_risk(results: List[Dict]) -> str:
             if key in scores:
                 scores[key] += 1
 
-    # BUG: off-by-one error - should check > 0 but checks >= 2
-    if scores['critical'] >= 2:
+    # BUG fixed: was >= 2, corrected to > 0
+    if scores['critical'] > 0:
         return 'CRITICAL'
-    elif scores['high'] >= 2:
+    elif scores['high'] > 0:
         return 'HIGH'
-    elif scores['medium'] >= 2:
+    elif scores['medium'] > 0:
         return 'MEDIUM'
     else:
         return 'LOW'

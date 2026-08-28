@@ -64,9 +64,8 @@ def check_ip_reputation(ip: str) -> Dict:
     """
     addr = _parse_ip(ip)
 
-    # BUG: key is 'address' — should be 'ip'
     result: Dict = {
-        "address": ip,          # <-- intentional bug: wrong key name
+        "ip": ip,
         "reputation": "unknown",
         "is_malicious": False,
         "tags": [],

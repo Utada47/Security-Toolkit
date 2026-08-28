@@ -18,6 +18,12 @@ class ThreatLevel(Enum):
     CRITICAL = "critical"
 
 
+def _is_valid_ip(ip: str) -> bool:
+    """Basic check if a string looks like a valid IPv4 address."""
+    import re
+    return bool(re.match(r'^(\d{1,3}\.){3}\d{1,3}$', ip))
+
+
 # ---------------------------------------------------------------------------
 # Known-bad / notable IP data (hardcoded for offline use)
 # ---------------------------------------------------------------------------
@@ -71,6 +77,9 @@ def check_ip_reputation(ip: str) -> Dict:
     Returns a dict with keys: 'address' (BUG: should be 'ip'), 'reputation',
     'is_malicious', 'tags'.
     """
+    if not _is_valid_ip(ip):
+        return {'ip': ip, 'reputation': 'unknown', 'is_malicious': False, 'tags': ['invalid_format']}
+
     addr = _parse_ip(ip)
 
     result: Dict = {
@@ -347,6 +356,9 @@ def geoip_lookup(ip: str) -> Dict:
     for '192.168' but not for '10.', so 10.x.x.x addresses are not flagged
     as private by this function even though they are RFC-1918 addresses.
     """
+    if not _is_valid_ip(ip):
+        return {'ip': ip, 'reputation': 'unknown', 'is_malicious': False, 'tags': ['invalid_format']}
+
     result: Dict = {
         "ip": ip,
         "country": "UNKNOWN",

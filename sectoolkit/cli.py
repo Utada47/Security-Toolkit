@@ -1,5 +1,6 @@
 """Command-line interface for the security toolkit."""
 import os
+import json
 import click
 from sectoolkit import __version__
 from sectoolkit import hashing  # noqa: F401 - triggers check registration
@@ -1036,6 +1037,54 @@ def threat_ioc(value, ioc_file, output_json):
             click.echo(f"  Matched value: {result.get('matched_ioc', 'unknown')}")
         else:
             click.echo("  No match found in IOC list.")
+
+
+@cli.command(name="report")
+@click.option("--input", "input_file", default=None, help="Path to a JSON file containing previous scan results.")
+@click.option("--output", "output_file", required=True, help="Output file path.")
+@click.option(
+    "--format", "report_format",
+    type=click.Choice(["json", "csv", "html"]),
+    default="html",
+    show_default=True,
+    help="Output format.",
+)
+@click.option("--title", default="Security Report", show_default=True, help="Report title.")
+def report(input_file, output_file, report_format, title):
+    """Export scan results to a file (JSON, CSV, or HTML).
+
+    Reads results from --input (a JSON file produced by a previous scan)
+    and writes a formatted report to --output.
+
+    \b
+    Example:
+      sectoolkit report --input results.json --output report.html --format html
+    """
+    data = {}
+    if input_file:
+        try:
+            with open(input_file, 'r') as f:
+                data = json.load(f)
+        except Exception as exc:
+            raise click.ClickException(f"Could not read input file: {exc}")
+
+    if report_format == "json":
+        export_json(data, output_file)
+    elif report_format == "csv":
+        if isinstance(data, list):
+            rows = data
+        elif isinstance(data, dict):
+            rows = [{"key": k, "value": str(v)} for k, v in data.items()]
+        else:
+            rows = [{"data": str(data)}]
+        export_csv(rows, output_file)
+    elif report_format == "html":
+        if isinstance(data, dict):
+            export_html(data, title=title, filepath=output_file)
+        else:
+            export_html({"data": str(data)}, title=title, filepath=output_file)
+
+    click.echo(f"Report saved to {output_file}")
 
 
 if __name__ == "__main__":

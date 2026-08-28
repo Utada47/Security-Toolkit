@@ -81,10 +81,10 @@ class TestCheckIpReputation:
         assert result["reputation"] == "dns"
 
     def test_check_ip_reputation_invalid_ip(self):
-        """Non-IP strings should be flagged as 'invalid'."""
+        """Non-IP strings should be flagged with 'invalid_format' tag."""
         result = check_ip_reputation("not-an-ip")
-        assert result["reputation"] == "invalid"
-        assert "invalid-ip" in result["tags"]
+        assert result["reputation"] == "unknown"
+        assert "invalid_format" in result["tags"]
         assert result["is_malicious"] is False
 
     def test_check_ip_reputation_public_clean_ip(self):

@@ -296,3 +296,199 @@ def hash_threat_lookup(hash_str: str) -> Dict:
         result["threat_level"] = entry["threat_level"]
 
     return result
+
+
+
+# ---------------------------------------------------------------------------
+# 5. geoip_lookup
+# ---------------------------------------------------------------------------
+
+# Hardcoded mapping of well-known IP prefixes to geo/org data
+_GEOIP_RANGES = [
+    ("8.8.8.0/24",    {"country": "US", "org": "Google LLC"}),
+    ("8.8.4.0/24",    {"country": "US", "org": "Google LLC"}),
+    ("1.1.1.0/24",    {"country": "AU", "org": "Cloudflare, Inc."}),
+    ("1.0.0.0/24",    {"country": "AU", "org": "Cloudflare, Inc."}),
+    ("9.9.9.0/24",    {"country": "US", "org": "Quad9"}),
+    ("208.67.222.0/24", {"country": "US", "org": "Cisco OpenDNS"}),
+    ("208.67.220.0/24", {"country": "US", "org": "Cisco OpenDNS"}),
+    ("185.220.101.0/24", {"country": "DE", "org": "Tor Project (exit node)"}),
+    ("45.33.32.0/24",  {"country": "US", "org": "Akamai Technologies"}),
+    # Private / special ranges
+    ("10.0.0.0/8",    {"country": "LOCAL", "org": "Private Network (RFC 1918)"}),
+    ("172.16.0.0/12", {"country": "LOCAL", "org": "Private Network (RFC 1918)"}),
+    ("192.168.0.0/16", {"country": "LOCAL", "org": "Private Network (RFC 1918)"}),
+    ("127.0.0.0/8",   {"country": "LOCAL", "org": "Loopback"}),
+    ("169.254.0.0/16", {"country": "LOCAL", "org": "Link-local"}),
+]
+
+_COMPILED_GEOIP_RANGES = [
+    (ipaddress.IPv4Network(prefix), data) for prefix, data in _GEOIP_RANGES
+]
+
+
+def geoip_lookup(ip: str) -> Dict:
+    """
+    Simple offline GeoIP lookup using a hardcoded mapping of well-known IP
+    ranges to country and organisation.
+
+    Returns a dict with keys: 'ip', 'country', 'org', 'is_private'.
+
+    NOTE (intentional bug): private detection relies on a startswith check
+    for '192.168' but not for '10.', so 10.x.x.x addresses are not flagged
+    as private by this function even though they are RFC-1918 addresses.
+    """
+    result: Dict = {
+        "ip": ip,
+        "country": "UNKNOWN",
+        "org": "Unknown",
+        "is_private": False,
+    }
+
+    addr = _parse_ip(ip)
+    if addr is None:
+        result["country"] = "INVALID"
+        result["org"] = "Invalid IP address"
+        return result
+
+    # BUG: only '192.168' is checked; '10.' prefix is intentionally omitted
+    if ip.startswith("192.168") or ip.startswith("172.16"):
+        result["is_private"] = True
+
+    # Walk the known ranges for a geo match
+    for network, data in _COMPILED_GEOIP_RANGES:
+        if addr in network:
+            result["country"] = data["country"]
+            result["org"] = data["org"]
+            if data["country"] == "LOCAL":
+                result["is_private"] = True
+            return result
+
+    # Loopback / link-local fallback
+    if addr.is_loopback or addr.is_link_local:
+        result["country"] = "LOCAL"
+        result["org"] = "Loopback/Link-local"
+        result["is_private"] = True
+        return result
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# 6. bulk_ioc_scan
+# ---------------------------------------------------------------------------
+
+def bulk_ioc_scan(values: List[str], ioc_list: List[str]) -> Dict:
+    """
+    Scan multiple values against an IOC list using :func:`match_ioc`.
+
+    Returns a dict with keys:
+    - 'total'         — number of values checked
+    - 'matched_count' — number of values that matched at least one IOC
+    - 'matches'       — list of match result dicts (only values that matched)
+    - 'clean'         — list of values that had no matches
+    """
+    matches: List[Dict] = []
+    clean: List[str] = []
+
+    for value in values:
+        result = match_ioc(value, ioc_list)
+        if result["matched"]:
+            matches.append(result)
+        else:
+            clean.append(value)
+
+    return {
+        "total": len(values),
+        "matched_count": len(matches),
+        "matches": matches,
+        "clean": clean,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 7. generate_threat_report
+# ---------------------------------------------------------------------------
+
+def generate_threat_report(results: List[Dict]) -> str:
+    """
+    Format a list of threat-check result dicts into a human-readable text
+    report.  Each dict is expected to contain at least one key that signals
+    its type (e.g. 'ip', 'url', 'hash', 'value').
+
+    Returns a multi-line formatted string ready for printing or logging.
+    """
+    lines: List[str] = []
+    lines.append("=" * 60)
+    lines.append("  THREAT INTELLIGENCE REPORT")
+    lines.append("=" * 60)
+    lines.append(f"  Total entries analysed: {len(results)}")
+    lines.append("")
+
+    for idx, entry in enumerate(results, start=1):
+        lines.append(f"[{idx}] " + "-" * 50)
+
+        # --- IP reputation result ---
+        if "ip" in entry and "reputation" in entry:
+            lines.append(f"  Type       : IP Reputation")
+            lines.append(f"  IP         : {entry.get('ip', 'N/A')}")
+            lines.append(f"  Reputation : {entry.get('reputation', 'N/A')}")
+            lines.append(f"  Malicious  : {entry.get('is_malicious', False)}")
+            tags = entry.get("tags", [])
+            if tags:
+                lines.append(f"  Tags       : {', '.join(tags)}")
+
+        # --- GeoIP result ---
+        elif "ip" in entry and "country" in entry:
+            lines.append(f"  Type       : GeoIP Lookup")
+            lines.append(f"  IP         : {entry.get('ip', 'N/A')}")
+            lines.append(f"  Country    : {entry.get('country', 'N/A')}")
+            lines.append(f"  Org        : {entry.get('org', 'N/A')}")
+            lines.append(f"  Private    : {entry.get('is_private', False)}")
+
+        # --- URL lookup result ---
+        elif "url" in entry:
+            lines.append(f"  Type       : URL Check")
+            lines.append(f"  URL        : {entry.get('url', 'N/A')}")
+            lines.append(f"  Malicious  : {entry.get('is_malicious', False)}")
+            patterns = entry.get("matched_patterns", [])
+            if patterns:
+                lines.append(f"  Patterns   : {', '.join(patterns)}")
+
+        # --- Hash lookup result ---
+        elif "hash" in entry:
+            lines.append(f"  Type       : Hash Lookup")
+            lines.append(f"  Hash       : {entry.get('hash', 'N/A')}")
+            lines.append(f"  Found      : {entry.get('found', False)}")
+            lines.append(f"  Threat lvl : {entry.get('threat_level', 'unknown')}")
+            if entry.get("malware_name"):
+                lines.append(f"  Malware    : {entry.get('malware_name')}")
+
+        # --- IOC match result ---
+        elif "value" in entry and "matched" in entry:
+            lines.append(f"  Type       : IOC Match")
+            lines.append(f"  Value      : {entry.get('value', 'N/A')}")
+            lines.append(f"  Matched    : {entry.get('matched', False)}")
+            iocs = entry.get("matched_iocs", [])
+            if iocs:
+                lines.append(f"  Matched IOCs: {', '.join(iocs)}")
+
+        # --- Bulk IOC scan result ---
+        elif "total" in entry and "matched_count" in entry:
+            lines.append(f"  Type          : Bulk IOC Scan")
+            lines.append(f"  Total checked : {entry.get('total', 0)}")
+            lines.append(f"  Matched       : {entry.get('matched_count', 0)}")
+            lines.append(f"  Clean         : {len(entry.get('clean', []))}")
+
+        # --- Generic / unknown result ---
+        else:
+            for key, val in entry.items():
+                lines.append(f"  {key:<12}: {val}")
+
+        lines.append("")
+
+    lines.append("=" * 60)
+    lines.append("  END OF REPORT")
+    lines.append("=" * 60)
+
+    return "\n".join(lines)

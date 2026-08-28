@@ -174,7 +174,7 @@ def lookup_malicious_url(url: str) -> Dict:
     for pattern in _COMPILED_URL_PATTERNS:
         if pattern.search(target):
             result["matched_patterns"].append(pattern.pattern)
-            result["flagged"] = True   # BUG: should be result["is_malicious"] = True
+            result["is_malicious"] = True
 
     return result
 

@@ -267,6 +267,23 @@ sectoolkit generate-password --no-symbols --length 12
 Uses Python's `secrets` module (not `random`) for cryptographically secure
 randomness, and guarantees at least one character from each enabled class.
 
+### Threat intelligence checks
+
+```bash
+sectoolkit threat-ip 8.8.8.8
+sectoolkit threat-url https://suspicious-domain.com
+sectoolkit threat-hash 5d41402abc4b2a76b9719d911017c592
+sectoolkit threat-ioc somevalue --ioc-file wordlists/sample_iocs.txt
+```
+
+### Export scan results
+
+```bash
+sectoolkit vuln-scan example.com --export results.json
+sectoolkit web-security example.com --export report.html --export-format html
+sectoolkit report --input results.json --output report.html --format html
+```
+
 ## Library usage
 
 ```python
@@ -316,5 +333,5 @@ tests/          # pytest test suite
 - [x] Domain information: WHOIS, DNS propagation, subdomain takeover detection
 - [x] Service banners: grabbing, fingerprinting, version detection
 - [x] Network utilities: IP/CIDR calculations, subnet operations, private IP detection
-- [ ] Threat intelligence integration
-- [ ] Reporting and export features
+- [x] Threat intelligence integration
+- [x] Reporting and export features

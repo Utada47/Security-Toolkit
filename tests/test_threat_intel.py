@@ -12,6 +12,9 @@ from sectoolkit.threat_intel import (
     lookup_malicious_url,
     match_ioc,
     hash_threat_lookup,
+    geoip_lookup,
+    bulk_ioc_scan,
+    generate_threat_report,
 )
 
 
@@ -223,3 +226,75 @@ class TestHashThreatLookup:
         result = hash_threat_lookup(sha1)
         assert result["found"] is True
         assert result["threat_level"] == "info"
+
+
+
+# ===========================================================================
+# geoip_lookup
+# ===========================================================================
+
+class TestGeoipLookup:
+
+    def test_geoip_lookup_private_192(self):
+        """192.168.1.1 is RFC-1918; is_private must be True."""
+        result = geoip_lookup("192.168.1.1")
+        assert result["is_private"] is True
+
+    def test_geoip_lookup_private_10(self):
+        """BUG EXPOSURE: 10.0.0.1 is RFC-1918; is_private must be True.
+        The current implementation omits '10.' from its startswith check,
+        so this test will FAIL until the bug is fixed."""
+        result = geoip_lookup("10.0.0.1")
+        assert result["is_private"] is True, (
+            "Expected is_private=True for 10.0.0.1 (RFC-1918 10.x.x.x range). "
+            f"Got is_private={result['is_private']}"
+        )
+
+    def test_geoip_lookup_google_dns(self):
+        """8.8.8.8 is in the Google LLC range and should have country == 'US'."""
+        result = geoip_lookup("8.8.8.8")
+        assert result["country"] == "US"
+
+
+# ===========================================================================
+# bulk_ioc_scan
+# ===========================================================================
+
+class TestBulkIocScan:
+
+    def test_bulk_ioc_scan_finds_matches(self):
+        """Values that are in the IOC list should appear in matches."""
+        ioc_list = ["evil.com", "192.168.1.100", "malware.exe"]
+        values = ["evil.com", "safe.org", "192.168.1.100"]
+        result = bulk_ioc_scan(values, ioc_list)
+        assert result["matched_count"] == 2
+        matched_values = [m["value"] for m in result["matches"]]
+        assert "evil.com" in matched_values
+        assert "192.168.1.100" in matched_values
+        assert "safe.org" in result["clean"]
+
+    def test_bulk_ioc_scan_empty(self):
+        """An empty values list should return zeros and empty collections."""
+        result = bulk_ioc_scan([], ["evil.com"])
+        assert result["total"] == 0
+        assert result["matched_count"] == 0
+        assert result["matches"] == []
+        assert result["clean"] == []
+
+
+# ===========================================================================
+# generate_threat_report
+# ===========================================================================
+
+class TestGenerateThreatReport:
+
+    def test_generate_threat_report_not_empty(self):
+        """generate_threat_report should return a non-empty string."""
+        sample_results = [
+            check_ip_reputation("8.8.8.8"),
+            lookup_malicious_url("http://phishing-site.com"),
+            hash_threat_lookup("44d88612fea8a8f36de82e1278abb02f"),
+        ]
+        report = generate_threat_report(sample_results)
+        assert isinstance(report, str)
+        assert len(report) > 0

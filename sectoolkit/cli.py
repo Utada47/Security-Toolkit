@@ -29,6 +29,8 @@ from sectoolkit.xss_detector import detect_xss_in_string, analyze_html_context
 from sectoolkit.jwt_analyzer import parse_jwt, analyze_jwt_security, verify_jwt_signature
 from sectoolkit.api_security import test_http_methods, check_rate_limiting, check_cors_policy
 from sectoolkit.hash_crack import analyze_hash_type, rainbow_table_lookup, estimate_crack_time, compare_hash_algorithms
+from sectoolkit.threat_intel import check_ip_reputation, geoip_lookup, lookup_malicious_url, hash_threat_lookup, match_ioc
+from sectoolkit.reporter import export_json, export_csv, export_html, create_summary_report
 
 
 class AutoAnalyzeGroup(click.Group):
@@ -840,6 +842,149 @@ def cors_check(url, origin, output_json):
                     click.echo(f"  {issue}")
         else:
             click.echo("✓ CORS is not enabled or not detected")
+
+
+@cli.command(name="threat-ip")
+@click.argument("ip")
+@click.option("--json", "output_json", is_flag=True, help="Output in JSON format.")
+def threat_ip(ip, output_json):
+    """Check an IP address against threat intelligence data.
+
+    Looks up IP reputation and geolocation information.
+
+    \b
+    Example:
+      sectoolkit threat-ip 185.220.101.1
+    """
+    import json
+
+    reputation = check_ip_reputation(ip)
+    geo = geoip_lookup(ip)
+
+    result = {"ip": ip, "reputation": reputation, "geolocation": geo}
+
+    if output_json:
+        click.echo(json.dumps(result, indent=2, default=str))
+    else:
+        click.echo(f"[IP Reputation: {ip}]")
+        click.echo(f"  Is malicious: {reputation.get('is_malicious', 'unknown')}")
+        click.echo(f"  Reputation:   {reputation.get('reputation', 'unknown')}")
+        if reputation.get("tags"):
+            click.echo(f"  Tags:         {', '.join(reputation['tags'])}")
+        if reputation.get("is_bogon"):
+            click.echo("  \u26a0 Bogon / reserved address space")
+        click.echo("")
+        click.echo("[Geolocation]")
+        for key, value in geo.items():
+            if key != "ip":
+                click.echo(f"  {key}: {value}")
+
+
+@cli.command(name="threat-url")
+@click.argument("url")
+@click.option("--json", "output_json", is_flag=True, help="Output in JSON format.")
+def threat_url(url, output_json):
+    """Check a URL against threat intelligence data.
+
+    Looks up whether the URL matches known malicious patterns or domains.
+
+    \b
+    Example:
+      sectoolkit threat-url "http://malware-domain.example.com/payload"
+    """
+    import json
+
+    result = lookup_malicious_url(url)
+
+    if output_json:
+        click.echo(json.dumps(result, indent=2, default=str))
+    else:
+        click.echo(f"[URL Threat Check]")
+        click.echo(f"  URL:         {result.get('url', url)}")
+        click.echo(f"  Is malicious:{result.get('is_malicious', 'unknown')}")
+        click.echo(f"  Risk level:  {result.get('risk_level', 'unknown')}")
+        if result.get("reasons"):
+            click.echo("  Reasons:")
+            for reason in result["reasons"]:
+                click.echo(f"    - {reason}")
+        if result.get("domain_info"):
+            click.echo(f"  Domain info: {result['domain_info']}")
+
+
+@cli.command(name="threat-hash")
+@click.argument("hash_value")
+@click.option("--json", "output_json", is_flag=True, help="Output in JSON format.")
+def threat_hash(hash_value, output_json):
+    """Check a file hash against threat intelligence data.
+
+    Looks up whether the hash matches known malware or threat samples.
+
+    \b
+    Example:
+      sectoolkit threat-hash d41d8cd98f00b204e9800998ecf8427e
+    """
+    import json
+
+    result = hash_threat_lookup(hash_value)
+
+    if output_json:
+        click.echo(json.dumps(result, indent=2, default=str))
+    else:
+        click.echo(f"[Hash Threat Lookup]")
+        click.echo(f"  Hash:        {result.get('hash', hash_value)}")
+        click.echo(f"  Is malicious:{result.get('is_malicious', 'unknown')}")
+        click.echo(f"  Algorithm:   {result.get('algorithm', 'unknown')}")
+        if result.get("malware_name"):
+            click.echo(f"  Malware:     {result['malware_name']}")
+        if result.get("tags"):
+            click.echo(f"  Tags:        {', '.join(result['tags'])}")
+
+
+@cli.command(name="threat-ioc")
+@click.argument("value")
+@click.option(
+    "--ioc-file",
+    type=click.Path(exists=True),
+    default=None,
+    help="Path to a file containing one IOC per line to match against.",
+)
+@click.option("--json", "output_json", is_flag=True, help="Output in JSON format.")
+def threat_ioc(value, ioc_file, output_json):
+    """Match a value against a list of Indicators of Compromise (IOCs).
+
+    Provide --ioc-file (one IOC per line) or checks against the built-in
+    IOC list.
+
+    \b
+    Example:
+      sectoolkit threat-ioc 185.220.101.1
+      sectoolkit threat-ioc suspicious.domain.com --ioc-file my-iocs.txt
+    """
+    import json
+
+    ioc_list = None
+    if ioc_file:
+        try:
+            with open(ioc_file, "r", encoding="utf-8") as f:
+                ioc_list = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+        except Exception as exc:
+            raise click.ClickException(f"Could not read IOC file: {exc}")
+
+    if ioc_list is not None:
+        result = match_ioc(value, ioc_list)
+    else:
+        result = match_ioc(value)
+
+    if output_json:
+        click.echo(json.dumps(result, indent=2, default=str))
+    else:
+        click.echo(f"[IOC Match: {value}]")
+        click.echo(f"  Matched: {result.get('matched', False)}")
+        if result.get("matched"):
+            click.echo(f"  IOC type:      {result.get('ioc_type', 'unknown')}")
+            click.echo(f"  Matched value: {result.get('matched_ioc', 'unknown')}")
+        else:
+            click.echo("  No match found in IOC list.")
 
 
 if __name__ == "__main__":

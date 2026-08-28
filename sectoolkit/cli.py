@@ -513,8 +513,8 @@ def web_security(hostname, port, check_http, export_path, export_format):
 @click.option("--ports", help="Comma-separated ports to scan, e.g. '21,22,80,443'. Defaults to common ports.")
 @click.option("--json", "as_json", is_flag=True, help="Output the report as JSON.")
 @click.option("--export", "export_path", default=None, help="Export report to a file.")
-@click.option("--export-format", "format", type=click.Choice(["json", "csv", "html"]), default="json", show_default=True, help="Export file format.")
-def vuln_scan(hostname, ports, as_json, export_path, format):
+@click.option("--export-format", "export_format", type=click.Choice(["json", "csv", "html"]), default="json", show_default=True, help="Export file format.")
+def vuln_scan(hostname, ports, as_json, export_path, export_format):
     """Run a basic vulnerability scan on a target host.
     
     \b
@@ -576,12 +576,12 @@ def vuln_scan(hostname, ports, as_json, export_path, format):
             "open_ports": str(result["port_scan"].get("open_ports", [])),
             "risky_ports": str(result["port_scan"].get("risky_ports", [])),
         }
-        if format == "json":
+        if export_format == "json":
             export_json(export_data, export_path)
-        elif format == "csv":
+        elif export_format == "csv":
             rows = [{"key": k, "value": str(v)} for k, v in export_data.items()]
             export_csv(rows, export_path)
-        elif format == "html":
+        elif export_format == "html":
             export_html(export_data, title="Vulnerability Scan Report", filepath=export_path)
         click.echo(f"Report saved to {export_path}")
 

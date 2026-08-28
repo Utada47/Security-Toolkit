@@ -311,7 +311,7 @@ def hash_threat_lookup(hash_str: str) -> Dict:
         entry = _KNOWN_MALICIOUS_HASHES[h]
         result["found"] = True
         result["malware_name"] = entry["malware_name"]
-        result["threat_level"] = ThreatLevel.HIGH.value
+        result["threat_level"] = entry["threat_level"]
 
     return result
 

@@ -1,0 +1,11 @@
+# Sample IOC list for testing
+# Format: one IOC per line (IP, domain, hash, URL pattern)
+192.168.100.99
+10.0.0.254
+evil-domain.com
+malware-cdn.net
+phishing-login.xyz
+5d41402abc4b2a76b9719d911017c592
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+badactor.ru
+suspicious-payload.exe

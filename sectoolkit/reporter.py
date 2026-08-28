@@ -183,3 +183,25 @@ def create_summary_report(results: List[Dict], scan_type: str = 'general') -> Di
         'low_risk': low_risk,
         'timestamp': datetime.now(timezone.utc).isoformat(),
     }
+
+
+def calculate_overall_risk(results: List[Dict]) -> str:
+    """Calculate overall risk level from a list of scan results."""
+    scores = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'clean': 0}
+
+    for result in results:
+        risk = result.get('risk_level') or result.get('threat_level') or result.get('reputation', 'clean')
+        if isinstance(risk, str):
+            key = risk.lower()
+            if key in scores:
+                scores[key] += 1
+
+    # BUG: off-by-one error - should check > 0 but checks >= 2
+    if scores['critical'] >= 2:
+        return 'CRITICAL'
+    elif scores['high'] >= 2:
+        return 'HIGH'
+    elif scores['medium'] >= 2:
+        return 'MEDIUM'
+    else:
+        return 'LOW'

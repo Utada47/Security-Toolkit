@@ -389,7 +389,9 @@ def port_scan(host, ports, timeout):
 @click.argument("logfile", type=click.Path(exists=True))
 @click.option("--json", "as_json", is_flag=True, help="Output the report as JSON instead of plain text.")
 @click.option("--brute-force-threshold", default=100, show_default=True, help="Threshold for detecting brute force attempts.")
-def log_analyze(logfile, as_json, brute_force_threshold):
+@click.option("--export", "export_path", default=None, help="Export report to a file.")
+@click.option("--export-format", "export_format", type=click.Choice(["json", "csv", "html"]), default="json", show_default=True, help="Export file format.")
+def log_analyze(logfile, as_json, brute_force_threshold, export_path, export_format):
     """Analyze a log file for suspicious patterns and activity.
 
     Detects failed logins, SQL injection attempts, XSS patterns, directory
@@ -435,12 +437,26 @@ def log_analyze(logfile, as_json, brute_force_threshold):
         for ip_info in suspicious_ips:
             click.echo(f"  ⚠ {ip_info}")
 
+    if export_path:
+        export_data = {k: v for k, v in result.items() if k != "top_ips"}
+        export_data["top_ips"] = [{"ip": ip, "count": count} for ip, count in result["top_ips"]]
+        if export_format == "json":
+            export_json(export_data, export_path)
+        elif export_format == "csv":
+            rows = [{"key": k, "value": str(v)} for k, v in export_data.items()]
+            export_csv(rows, export_path)
+        elif export_format == "html":
+            export_html(export_data, title="Log Analysis Report", filepath=export_path)
+        click.echo(f"Report saved to {export_path}")
+
 
 @cli.command(name="web-security")
 @click.argument("hostname")
 @click.option("--port", default=443, show_default=True, help="Port to connect to.")
 @click.option("--check-http", is_flag=True, help="Also check if HTTP (port 80) redirects to HTTPS.")
-def web_security(hostname, port, check_http):
+@click.option("--export", "export_path", default=None, help="Export report to a file.")
+@click.option("--export-format", "export_format", type=click.Choice(["json", "csv", "html"]), default="json", show_default=True, help="Export file format.")
+def web_security(hostname, port, check_http, export_path, export_format):
     """Check web server security headers and configurations.
     
     Analyzes HTTP security headers like HSTS, CSP, X-Frame-Options, and more.
@@ -475,12 +491,30 @@ def web_security(hostname, port, check_http):
         else:
             click.echo(f"  ✗ HTTP does not redirect to HTTPS")
 
+    if export_path:
+        export_data = {
+            "hostname": hostname,
+            "security_score": result.get("security_score"),
+            "headers_found": str(result.get("headers_found", {})),
+            "missing_headers": str(result.get("missing_headers", [])),
+        }
+        if export_format == "json":
+            export_json(export_data, export_path)
+        elif export_format == "csv":
+            rows = [{"key": k, "value": str(v)} for k, v in export_data.items()]
+            export_csv(rows, export_path)
+        elif export_format == "html":
+            export_html(export_data, title="Web Security Report", filepath=export_path)
+        click.echo(f"Report saved to {export_path}")
+
 
 @cli.command(name="vuln-scan")
 @click.argument("hostname")
 @click.option("--ports", help="Comma-separated ports to scan, e.g. '21,22,80,443'. Defaults to common ports.")
 @click.option("--json", "as_json", is_flag=True, help="Output the report as JSON.")
-def vuln_scan(hostname, ports, as_json):
+@click.option("--export", "export_path", default=None, help="Export report to a file.")
+@click.option("--export-format", "format", type=click.Choice(["json", "csv", "html"]), default="json", show_default=True, help="Export file format.")
+def vuln_scan(hostname, ports, as_json, export_path, format):
     """Run a basic vulnerability scan on a target host.
     
     \b
@@ -533,6 +567,23 @@ def vuln_scan(hostname, ports, as_json):
         click.echo("\n[Potentially Sensitive Paths]")
         for path in result["path_check"]["potentially_sensitive"]:
             click.echo(f"  ⚠ {path}")
+
+    if export_path:
+        export_data = {
+            "hostname": result.get("hostname"),
+            "timestamp": str(result.get("timestamp")),
+            "risk_level": result.get("risk_level"),
+            "open_ports": str(result["port_scan"].get("open_ports", [])),
+            "risky_ports": str(result["port_scan"].get("risky_ports", [])),
+        }
+        if format == "json":
+            export_json(export_data, export_path)
+        elif format == "csv":
+            rows = [{"key": k, "value": str(v)} for k, v in export_data.items()]
+            export_csv(rows, export_path)
+        elif format == "html":
+            export_html(export_data, title="Vulnerability Scan Report", filepath=export_path)
+        click.echo(f"Report saved to {export_path}")
 
 
 @cli.command(name="verify-hash")

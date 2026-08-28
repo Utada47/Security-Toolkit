@@ -20,15 +20,10 @@ def export_json(data: Dict, filepath: str) -> bool:
 
     Returns:
         True on success, False on failure.
-
-    Note:
-        BUG: File is opened without explicit encoding, which can cause
-        UnicodeEncodeError on Windows when data contains non-ASCII characters.
-        Should use open(filepath, 'w', encoding='utf-8').
     """
     try:
         content = json.dumps(data, indent=2, default=str)
-        with open(filepath, 'w') as f:  # BUG: missing encoding='utf-8'
+        with open(filepath, 'w', encoding='utf-8') as f:
             f.write(content)
         return True
     except Exception:
@@ -44,23 +39,16 @@ def export_csv(rows: List[Dict], filepath: str) -> bool:
 
     Returns:
         True on success, False on failure.
-
-    Note:
-        BUG: Uses csv.writer instead of csv.DictWriter, so header row and
-        data rows may not align if keys appear in different orders.
-        Should use csv.DictWriter with fieldnames=rows[0].keys().
     """
     if not rows:
         return False
     try:
+        fieldnames = list(rows[0].keys())
         with open(filepath, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)  # BUG: should be csv.DictWriter
-            # Write header from first row's keys
-            headers = list(rows[0].keys())
-            writer.writerow(headers)
-            # Write data rows — values may not match header order for all dicts
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
             for row in rows:
-                writer.writerow(list(row.values()))
+                writer.writerow(row)
         return True
     except Exception:
         return False

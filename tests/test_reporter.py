@@ -176,3 +176,28 @@ def test_create_summary_report_counts_high_risk():
     assert report["medium_risk"] == 1
     assert report["low_risk"] == 1
     assert report["total"] == 5
+
+
+# ---------------------------------------------------------------------------
+# calculate_overall_risk
+# ---------------------------------------------------------------------------
+
+from sectoolkit.reporter import calculate_overall_risk
+
+
+def test_calculate_overall_risk_single_critical():
+    """A single critical result should return CRITICAL (exposes >= 2 off-by-one bug)."""
+    results = [{'risk_level': 'critical'}]
+    assert calculate_overall_risk(results) == 'CRITICAL'
+
+
+def test_calculate_overall_risk_two_critical():
+    """Two critical results should return CRITICAL."""
+    results = [{'risk_level': 'critical'}, {'risk_level': 'critical'}]
+    assert calculate_overall_risk(results) == 'CRITICAL'
+
+
+def test_calculate_overall_risk_low():
+    """Only clean results should return LOW."""
+    results = [{'reputation': 'clean'}, {'reputation': 'clean'}]
+    assert calculate_overall_risk(results) == 'LOW'

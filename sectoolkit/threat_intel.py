@@ -5,7 +5,7 @@ IOC matching, and hash-based threat lookups.
 
 import ipaddress
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from urllib.parse import urlparse
 
 
@@ -503,3 +503,32 @@ def load_ioc_file(filepath: str) -> List[str]:
             if line and not line.startswith('#'):
                 iocs.append(line)
     return iocs
+
+
+def passive_dns_history(domain: str) -> Dict[str, Any]:
+    """Simulate passive DNS history lookup for a domain.
+    
+    In a real implementation this would query a threat intel API.
+    This version uses a small hardcoded dataset for demonstration.
+    """
+    # Hardcoded demo data - real implementation would hit an API
+    demo_history = {
+        'malware-cdn.net': [
+            {'ip': '185.220.101.45', 'first_seen': '2024-01-15', 'last_seen': '2024-03-20', 'country': 'NL'},
+            {'ip': '198.98.56.122', 'first_seen': '2024-03-21', 'last_seen': '2024-06-01', 'country': 'US'},
+        ],
+        'phishing-login.xyz': [
+            {'ip': '45.142.212.100', 'first_seen': '2025-01-01', 'last_seen': '2025-02-14', 'country': 'RU'},
+        ],
+        'evil-domain.com': [
+            {'ip': '91.108.4.0', 'first_seen': '2023-11-01', 'last_seen': '2024-01-01', 'country': 'DE'},
+        ],
+    }
+    
+    history = demo_history.get(domain.lower(), [])
+    return {
+        'domain': domain,
+        'history': history,
+        'total_ips': len(history),
+        'is_known_malicious': len(history) > 0,
+    }

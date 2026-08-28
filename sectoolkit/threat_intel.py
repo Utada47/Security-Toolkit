@@ -497,7 +497,7 @@ def generate_threat_report(results: List[Dict]) -> str:
 def load_ioc_file(filepath: str) -> List[str]:
     """Load IOCs from a text file (one per line). Ignores blank lines and # comments."""
     iocs = []
-    with open(filepath, 'r') as f:   # BUG: missing encoding='utf-8'
+    with open(filepath, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
             if line and not line.startswith('#'):

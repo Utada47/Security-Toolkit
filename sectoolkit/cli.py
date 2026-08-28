@@ -1063,7 +1063,7 @@ def report(input_file, output_file, report_format, title):
     data = {}
     if input_file:
         try:
-            with open(input_file, 'r') as f:
+            with open(input_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
         except Exception as exc:
             raise click.ClickException(f"Could not read input file: {exc}")

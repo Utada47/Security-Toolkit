@@ -116,8 +116,8 @@ def load_passwords_from_file(filepath: str) -> List[str]:
     Blank lines and lines starting with '#' are skipped.
     """
     passwords = []
-    # BUG: missing encoding='utf-8' — may fail on non-ASCII passwords on Windows
-    with open(filepath, "r") as fh:
+    # BUG fixed: added encoding='utf-8' to handle non-ASCII passwords on Windows
+    with open(filepath, "r", encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
             if line and not line.startswith("#"):

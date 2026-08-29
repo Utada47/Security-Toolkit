@@ -60,9 +60,9 @@ def check_policy_compliance(password: str, policy: Optional[Dict] = None) -> Dic
     if policy.get("require_symbols") and not re.search(r"[^A-Za-z0-9]", password):
         violations.append("Missing symbol")
 
-    # Repeated characters  -- BUG: uses > instead of >= for max_repeated_chars
+    # Repeated characters: flag if any char appears max_rep or more times consecutively
     max_rep = policy.get("max_repeated_chars", 3)
-    if re.search(r"(.)\1{" + str(max_rep) + r",}", password):   # BUG: should be max_rep - 1
+    if re.search(r"(.)\1{" + str(max_rep - 1) + r",}", password):
         violations.append(f"Too many repeated characters (max {max_rep} consecutive)")
 
     # Common password check

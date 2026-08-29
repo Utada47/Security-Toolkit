@@ -49,10 +49,10 @@ def snapshot_directory(directory: str, algorithm: str = "sha256",
     }
 
     if recursive:
-        # BUG: should use os.walk but accidentally uses os.listdir
-        for f in os.listdir(directory):
-            full = os.path.join(directory, f)
-            if os.path.isfile(full):
+        # Fixed: use os.walk to recurse into subdirectories
+        for root, _dirs, files in os.walk(directory):
+            for f in files:
+                full = os.path.join(root, f)
                 rel = os.path.relpath(full, directory)
                 h = compute_file_hash(full, algorithm)
                 if h is not None:

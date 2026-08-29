@@ -170,6 +170,26 @@ def monitor_file(filepath: str, interval: int = 5,
     return events
 
 
+def get_file_metadata(filepath: str) -> Dict[str, Any]:
+    """Return metadata for a single file: size, mtime, permissions, hash."""
+    result: Dict[str, Any] = {
+        "filepath": filepath,
+        "exists": os.path.exists(filepath),
+    }
+    if not result["exists"]:
+        return result
+    try:
+        stat = os.stat(filepath)
+        result["size_bytes"] = stat.st_size
+        result["modified_at"] = stat.st_mtime
+        result["sha256"] = compute_file_hash(filepath, "sha256")
+        result["readable"] = os.access(filepath, os.R_OK)
+        result["writable"] = os.access(filepath, os.W_OK)
+    except OSError as e:
+        result["error"] = str(e)
+    return result
+
+
 def find_large_files(directory: str, threshold_mb: float = 100.0) -> List[Dict[str, Any]]:
     """Find files larger than a threshold in a directory tree."""
     results = []

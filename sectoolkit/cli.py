@@ -31,6 +31,7 @@ from sectoolkit.jwt_analyzer import parse_jwt, analyze_jwt_security, verify_jwt_
 from sectoolkit.file_monitor import snapshot_directory, save_snapshot, load_snapshot, compare_snapshots
 from sectoolkit.config_auditor import audit_config_file
 from sectoolkit.password_audit import audit_password_file
+from sectoolkit.batch_processor import BatchProcessor, hash_batch_operation, analyze_batch_operation, entropy_batch_operation, create_batch_report
 from sectoolkit.api_security import test_http_methods, check_rate_limiting, check_cors_policy
 from sectoolkit.hash_crack import analyze_hash_type, rainbow_table_lookup, estimate_crack_time, compare_hash_algorithms
 from sectoolkit.threat_intel import check_ip_reputation, geoip_lookup, lookup_malicious_url, hash_threat_lookup, match_ioc
@@ -1297,6 +1298,222 @@ def password_audit(password_file, file_format, column, policy_file, export_path,
             export_html(result, title="Password Audit Report", filepath=export_path)
         
         click.echo(f"Results exported to {export_path}")
+
+
+@cli.command(name="batch-hash")
+@click.argument("directory", type=click.Path(exists=True))
+@click.option("--pattern", default="*", help="File pattern to match (glob style).")
+@click.option("--recursive", "-r", is_flag=True, default=True, help="Scan subdirectories recursively.")
+@click.option("--workers", default=10, help="Number of concurrent workers.")
+@click.option("--export", "export_path", help="Export results to file.")
+@click.option("--export-format", type=click.Choice(["json", "csv"]), default="json", help="Export format.")
+def batch_hash(directory, pattern, recursive, workers, export_path, export_format):
+    """Compute hashes for multiple files in batch mode.
+    
+    Processes files in parallel for faster hash computation of large directories.
+    """
+    processor = BatchProcessor(max_workers=workers)
+    
+    # Scan for files
+    click.echo(f"Scanning {directory} for files matching '{pattern}'...")
+    files = processor.scan_directory(directory, pattern, recursive)
+    
+    if not files:
+        click.echo("No files found matching the pattern.")
+        return
+    
+    click.echo(f"Found {len(files)} files. Computing hashes...")
+    
+    def progress_callback(completed, total, current_file):
+        percentage = (completed / total) * 100
+        click.echo(f"Progress: {completed}/{total} ({percentage:.1f}%) - {os.path.basename(current_file)}")
+    
+    # Process files
+    results = processor.process_files(files, hash_batch_operation, progress_callback)
+    
+    # Create summary report
+    report = create_batch_report(results)
+    
+    click.echo(f"\nBatch Hash Summary:")
+    click.echo(f"Total files: {report['summary']['total_files']}")
+    click.echo(f"Successful: {report['summary']['successful']}")
+    click.echo(f"Failed: {report['summary']['failed']}")
+    click.echo(f"Success rate: {report['summary']['success_rate']:.1f}%")
+    click.echo(f"Total size: {report['summary']['total_size_mb']} MB")
+    
+    # Export if requested
+    if export_path:
+        if processor.export_results(results, export_path, export_format):
+            click.echo(f"Results exported to {export_path}")
+        else:
+            click.echo(f"Failed to export results to {export_path}")
+
+
+@cli.command(name="batch-analyze")
+@click.argument("directory", type=click.Path(exists=True))
+@click.option("--pattern", default="*", help="File pattern to match (glob style).")
+@click.option("--recursive", "-r", is_flag=True, default=True, help="Scan subdirectories recursively.")
+@click.option("--workers", default=5, help="Number of concurrent workers.")
+@click.option("--export", "export_path", help="Export results to file.")
+@click.option("--export-format", type=click.Choice(["json", "csv"]), default="json", help="Export format.")
+def batch_analyze(directory, pattern, recursive, workers, export_path, export_format):
+    """Run full security analysis on multiple files in batch mode.
+    
+    Performs comprehensive analysis including hashing, entropy, file type detection,
+    and metadata extraction for all matching files.
+    """
+    processor = BatchProcessor(max_workers=workers)
+    
+    # Scan for files
+    click.echo(f"Scanning {directory} for files matching '{pattern}'...")
+    files = processor.scan_directory(directory, pattern, recursive)
+    
+    if not files:
+        click.echo("No files found matching the pattern.")
+        return
+    
+    click.echo(f"Found {len(files)} files. Running security analysis...")
+    
+    def progress_callback(completed, total, current_file):
+        percentage = (completed / total) * 100
+        click.echo(f"Progress: {completed}/{total} ({percentage:.1f}%) - {os.path.basename(current_file)}")
+    
+    # Process files
+    results = processor.process_files(files, analyze_batch_operation, progress_callback)
+    
+    # Create summary report
+    report = create_batch_report(results)
+    
+    click.echo(f"\nBatch Analysis Summary:")
+    click.echo(f"Total files: {report['summary']['total_files']}")
+    click.echo(f"Successful: {report['summary']['successful']}")
+    click.echo(f"Failed: {report['summary']['failed']}")
+    click.echo(f"Success rate: {report['summary']['success_rate']:.1f}%")
+    click.echo(f"Total size: {report['summary']['total_size_mb']} MB")
+    
+    # Show some interesting stats
+    high_entropy_files = []
+    suspicious_files = []
+    
+    for result in results:
+        if result.get('success', False):
+            analysis = result.get('analysis_results', {})
+            
+            # Check for high entropy (potentially encrypted/packed)
+            if 'entropy' in analysis:
+                entropy_info = analysis['entropy']
+                if isinstance(entropy_info, dict) and entropy_info.get('entropy', 0) > 7.5:
+                    high_entropy_files.append(result['file_path'])
+            
+            # Check for suspicious file types
+            if 'filetype' in analysis:
+                filetype_info = analysis['filetype']
+                if isinstance(filetype_info, dict) and filetype_info.get('extension_mismatch', False):
+                    suspicious_files.append(result['file_path'])
+    
+    if high_entropy_files:
+        click.echo(f"\nHigh entropy files (possibly encrypted/packed): {len(high_entropy_files)}")
+        for f in high_entropy_files[:5]:  # Show first 5
+            click.echo(f"  {os.path.basename(f)}")
+        if len(high_entropy_files) > 5:
+            click.echo(f"  ... and {len(high_entropy_files) - 5} more")
+    
+    if suspicious_files:
+        click.echo(f"\nSuspicious files (extension mismatch): {len(suspicious_files)}")
+        for f in suspicious_files[:5]:  # Show first 5
+            click.echo(f"  {os.path.basename(f)}")
+        if len(suspicious_files) > 5:
+            click.echo(f"  ... and {len(suspicious_files) - 5} more")
+    
+    # Export if requested
+    if export_path:
+        if processor.export_results(results, export_path, export_format):
+            click.echo(f"Results exported to {export_path}")
+        else:
+            click.echo(f"Failed to export results to {export_path}")
+
+
+@cli.command(name="batch-entropy")
+@click.argument("directory", type=click.Path(exists=True))
+@click.option("--pattern", default="*", help="File pattern to match (glob style).")
+@click.option("--recursive", "-r", is_flag=True, default=True, help="Scan subdirectories recursively.")
+@click.option("--workers", default=10, help="Number of concurrent workers.")
+@click.option("--threshold", default=7.0, help="Entropy threshold for flagging suspicious files.")
+@click.option("--export", "export_path", help="Export results to file.")
+@click.option("--export-format", type=click.Choice(["json", "csv"]), default="json", help="Export format.")
+def batch_entropy(directory, pattern, recursive, workers, threshold, export_path, export_format):
+    """Calculate entropy for multiple files to detect encrypted/packed content.
+    
+    High entropy (>7.0) may indicate encrypted, compressed, or packed files.
+    """
+    processor = BatchProcessor(max_workers=workers)
+    
+    # Scan for files
+    click.echo(f"Scanning {directory} for files matching '{pattern}'...")
+    files = processor.scan_directory(directory, pattern, recursive)
+    
+    if not files:
+        click.echo("No files found matching the pattern.")
+        return
+    
+    click.echo(f"Found {len(files)} files. Calculating entropy...")
+    
+    def progress_callback(completed, total, current_file):
+        percentage = (completed / total) * 100
+        click.echo(f"Progress: {completed}/{total} ({percentage:.1f}%) - {os.path.basename(current_file)}")
+    
+    # Process files
+    results = processor.process_files(files, entropy_batch_operation, progress_callback)
+    
+    # Analyze results
+    high_entropy_files = []
+    entropy_distribution = {'low': 0, 'medium': 0, 'high': 0, 'very_high': 0}
+    
+    for result in results:
+        if result.get('success', False):
+            entropy = result.get('entropy', 0)
+            
+            if entropy >= threshold:
+                high_entropy_files.append((result['file_path'], entropy))
+            
+            # Categorize entropy
+            if entropy < 4.0:
+                entropy_distribution['low'] += 1
+            elif entropy < 6.0:
+                entropy_distribution['medium'] += 1
+            elif entropy < 8.0:
+                entropy_distribution['high'] += 1
+            else:
+                entropy_distribution['very_high'] += 1
+    
+    # Create summary report
+    report = create_batch_report(results)
+    
+    click.echo(f"\nBatch Entropy Summary:")
+    click.echo(f"Total files: {report['summary']['total_files']}")
+    click.echo(f"Successful: {report['summary']['successful']}")
+    click.echo(f"Failed: {report['summary']['failed']}")
+    
+    click.echo(f"\nEntropy Distribution:")
+    click.echo(f"  Low (0-4.0):      {entropy_distribution['low']} files")
+    click.echo(f"  Medium (4.0-6.0): {entropy_distribution['medium']} files")
+    click.echo(f"  High (6.0-8.0):   {entropy_distribution['high']} files")
+    click.echo(f"  Very High (>8.0): {entropy_distribution['very_high']} files")
+    
+    if high_entropy_files:
+        click.echo(f"\nHigh entropy files (>{threshold}):")
+        high_entropy_files.sort(key=lambda x: x[1], reverse=True)
+        for file_path, entropy in high_entropy_files[:10]:  # Show top 10
+            click.echo(f"  {entropy:.2f} - {os.path.basename(file_path)}")
+        if len(high_entropy_files) > 10:
+            click.echo(f"  ... and {len(high_entropy_files) - 10} more")
+    
+    # Export if requested
+    if export_path:
+        if processor.export_results(results, export_path, export_format):
+            click.echo(f"Results exported to {export_path}")
+        else:
+            click.echo(f"Failed to export results to {export_path}")
 
 
 if __name__ == "__main__":

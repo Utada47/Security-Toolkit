@@ -32,6 +32,7 @@ from sectoolkit.file_monitor import snapshot_directory, save_snapshot, load_snap
 from sectoolkit.config_auditor import audit_config_file
 from sectoolkit.password_audit import audit_password_file
 from sectoolkit.batch_processor import BatchProcessor, hash_batch_operation, analyze_batch_operation, entropy_batch_operation, create_batch_report
+from sectoolkit.steganography import detect_image_steganography, detect_file_steganography
 from sectoolkit.api_security import test_http_methods, check_rate_limiting, check_cors_policy
 from sectoolkit.hash_crack import analyze_hash_type, rainbow_table_lookup, estimate_crack_time, compare_hash_algorithms
 from sectoolkit.threat_intel import check_ip_reputation, geoip_lookup, lookup_malicious_url, hash_threat_lookup, match_ioc
@@ -1514,6 +1515,193 @@ def batch_entropy(directory, pattern, recursive, workers, threshold, export_path
             click.echo(f"Results exported to {export_path}")
         else:
             click.echo(f"Failed to export results to {export_path}")
+
+
+@cli.command(name="stego-detect")
+@click.argument("filepath", type=click.Path(exists=True))
+@click.option("--image-mode", is_flag=True, help="Use image-specific steganography detection.")
+@click.option("--json", "output_json", is_flag=True, help="Output results in JSON format.")
+def stego_detect(filepath, image_mode, output_json):
+    """Detect potential steganography in files.
+    
+    Analyzes files for hidden data using statistical and structural analysis.
+    Use --image-mode for image-specific detection techniques.
+    """
+    import json
+    
+    if image_mode:
+        result = detect_image_steganography(filepath)
+    else:
+        result = detect_file_steganography(filepath)
+    
+    if output_json:
+        click.echo(json.dumps(result, indent=2, default=str))
+        return
+    
+    click.echo(f"Steganography Analysis: {result['file_path']}")
+    
+    if 'error' in result:
+        click.echo(f"Error: {result['error']}")
+        return
+    
+    if image_mode and 'file_type' in result:
+        click.echo(f"Image Type: {result['file_type']}")
+    
+    click.echo(f"Risk Level: {result['risk_level'].upper()}")
+    
+    if result['suspicious_indicators']:
+        click.echo(f"\nSuspicious Indicators ({len(result['suspicious_indicators'])}):")
+        for indicator in result['suspicious_indicators']:
+            click.echo(f"  • {indicator}")
+    else:
+        click.echo("\nNo suspicious indicators found.")
+    
+    # Show detailed analysis
+    analysis = result.get('analysis', {})
+    if analysis:
+        click.echo(f"\nDetailed Analysis:")
+        
+        if 'size_analysis' in analysis:
+            size_info = analysis['size_analysis']
+            click.echo(f"  File Size: {size_info.get('file_size', 0):,} bytes ({size_info.get('size_category', 'unknown')})")
+        
+        if 'lsb_analysis' in analysis:
+            lsb_info = analysis['lsb_analysis']
+            if 'chi_square' in lsb_info:
+                click.echo(f"  LSB Randomness: Chi-square = {lsb_info['chi_square']:.2f}")
+        
+        if 'entropy' in analysis:
+            entropy_info = analysis['entropy']
+            if 'high_entropy_regions' in entropy_info:
+                click.echo(f"  High Entropy Regions: {entropy_info['high_entropy_regions']}/{entropy_info.get('total_regions', 0)}")
+        
+        if 'appended_data' in analysis:
+            append_info = analysis['appended_data']
+            if append_info.get('extra_data_size', 0) > 0:
+                click.echo(f"  Extra Data: {append_info['extra_data_size']} bytes after format end")
+        
+        if 'strings' in analysis:
+            strings_info = analysis['strings']
+            encoded = strings_info.get('encoded_strings', 0)
+            if encoded > 0:
+                click.echo(f"  Encoded Strings: {encoded} (Base64: {strings_info.get('base64_strings', 0)}, Hex: {strings_info.get('hex_strings', 0)})")
+
+
+@cli.command(name="stego-scan")
+@click.argument("directory", type=click.Path(exists=True))
+@click.option("--pattern", default="*.{jpg,jpeg,png,gif,bmp}", help="File pattern to scan.")
+@click.option("--recursive", "-r", is_flag=True, default=True, help="Scan subdirectories recursively.")
+@click.option("--image-mode", is_flag=True, help="Use image-specific detection on all files.")
+@click.option("--min-risk", type=click.Choice(["low", "medium", "high"]), default="medium", help="Minimum risk level to report.")
+@click.option("--export", "export_path", help="Export results to file.")
+@click.option("--export-format", type=click.Choice(["json", "csv"]), default="json", help="Export format.")
+def stego_scan(directory, pattern, recursive, image_mode, min_risk, export_path, export_format):
+    """Scan directory for files with potential steganography.
+    
+    Performs steganography detection on multiple files and reports suspicious ones.
+    """
+    from pathlib import Path
+    import fnmatch
+    
+    risk_levels = {"low": 0, "medium": 1, "high": 2}
+    min_risk_level = risk_levels[min_risk]
+    
+    # Expand pattern to handle multiple extensions
+    if "{" in pattern and "}" in pattern:
+        # Handle pattern like "*.{jpg,jpeg,png}"
+        base_pattern = pattern.split("{")[0]
+        extensions = pattern.split("{")[1].split("}")[0].split(",")
+        patterns = [base_pattern + ext.strip() for ext in extensions]
+    else:
+        patterns = [pattern]
+    
+    # Find matching files
+    files = []
+    path = Path(directory)
+    
+    for p in patterns:
+        if recursive:
+            found_files = list(path.rglob(p))
+        else:
+            found_files = list(path.glob(p))
+        files.extend([str(f) for f in found_files if f.is_file()])
+    
+    # Remove duplicates
+    files = list(set(files))
+    
+    if not files:
+        click.echo("No matching files found.")
+        return
+    
+    click.echo(f"Scanning {len(files)} files for steganography...")
+    
+    suspicious_files = []
+    total_analyzed = 0
+    
+    for i, file_path in enumerate(files):
+        try:
+            if image_mode:
+                result = detect_image_steganography(file_path)
+            else:
+                result = detect_file_steganography(file_path)
+            
+            if 'error' not in result:
+                total_analyzed += 1
+                file_risk_level = risk_levels.get(result['risk_level'], 0)
+                
+                if file_risk_level >= min_risk_level:
+                    suspicious_files.append({
+                        'file': file_path,
+                        'risk_level': result['risk_level'],
+                        'indicators': result['suspicious_indicators'],
+                        'analysis': result.get('analysis', {})
+                    })
+            
+            # Progress indicator
+            if (i + 1) % 50 == 0 or i == len(files) - 1:
+                click.echo(f"Progress: {i + 1}/{len(files)} files analyzed")
+        
+        except Exception as e:
+            click.echo(f"Error analyzing {file_path}: {e}")
+    
+    # Results summary
+    click.echo(f"\nSteganography Scan Results:")
+    click.echo(f"Total files analyzed: {total_analyzed}")
+    click.echo(f"Suspicious files found: {len(suspicious_files)}")
+    
+    if suspicious_files:
+        # Group by risk level
+        by_risk = {'high': [], 'medium': [], 'low': []}
+        for f in suspicious_files:
+            by_risk[f['risk_level']].append(f)
+        
+        for risk in ['high', 'medium', 'low']:
+            if by_risk[risk] and risk_levels[risk] >= min_risk_level:
+                click.echo(f"\n{risk.upper()} RISK FILES ({len(by_risk[risk])}):")
+                for f in by_risk[risk][:10]:  # Show first 10
+                    click.echo(f"  • {os.path.basename(f['file'])} - {len(f['indicators'])} indicator(s)")
+                if len(by_risk[risk]) > 10:
+                    click.echo(f"  ... and {len(by_risk[risk]) - 10} more")
+    
+    # Export results if requested
+    if export_path and suspicious_files:
+        try:
+            if export_format == "json":
+                with open(export_path, 'w', encoding='utf-8') as f:
+                    json.dump(suspicious_files, f, indent=2, default=str)
+            elif export_format == "csv":
+                import csv
+                with open(export_path, 'w', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(['File', 'Risk Level', 'Indicators', 'Analysis Summary'])
+                    for f in suspicious_files:
+                        indicators_str = '; '.join(f['indicators'])
+                        analysis_summary = f"Size: {f['analysis'].get('size_analysis', {}).get('file_size', 0)} bytes"
+                        writer.writerow([f['file'], f['risk_level'], indicators_str, analysis_summary])
+            
+            click.echo(f"Results exported to {export_path}")
+        except Exception as e:
+            click.echo(f"Failed to export results: {e}")
 
 
 if __name__ == "__main__":

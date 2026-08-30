@@ -196,6 +196,124 @@ def estimate_password_entropy(password: str) -> Dict[str, Any]:
     }
 
 
+def audit_password_file(filepath: str, file_format: str = "txt", password_column: int = 1,
+                        policy: Optional[Dict] = None, check_breaches: bool = False) -> Dict[str, Any]:
+    """Audit passwords from a file for policy compliance and breaches.
+    
+    Args:
+        filepath: Path to password file
+        file_format: 'txt' (one per line) or 'csv' 
+        password_column: Column number for passwords in CSV (1-based)
+        policy: Custom password policy dict
+        check_breaches: Whether to check against breach databases
+        
+    Returns:
+        Dict with audit results including compliance rates and security scores
+    """
+    passwords = []
+    
+    # Read passwords from file
+    try:
+        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+            if file_format == "csv":
+                import csv
+                reader = csv.reader(f)
+                for row in reader:
+                    if len(row) >= password_column:
+                        passwords.append(row[password_column - 1].strip())
+            else:  # txt format
+                passwords = [line.strip() for line in f if line.strip()]
+    except Exception as e:
+        return {
+            "error": f"Could not read file: {e}",
+            "total_passwords": 0,
+            "compliant_count": 0,
+            "compliance_rate": 0.0,
+            "security_score": 0.0,
+        }
+    
+    if not passwords:
+        return {
+            "total_passwords": 0,
+            "compliant_count": 0,
+            "compliance_rate": 0.0,
+            "security_score": 0.0,
+            "common_violations": {},
+        }
+    
+    # Audit each password
+    password_results = []
+    violation_counts = {}
+    breach_count = 0
+    total_breach_appearances = 0
+    
+    for i, password in enumerate(passwords):
+        # Check policy compliance
+        compliance = check_policy_compliance(password, policy)
+        
+        result = {
+            "index": i + 1,
+            "compliant": compliance["compliant"],
+            "score": compliance["score"],
+            "violations": compliance["violations"],
+        }
+        
+        # Count violations
+        for violation in compliance["violations"]:
+            violation_counts[violation] = violation_counts.get(violation, 0) + 1
+        
+        # Check breaches if requested
+        if check_breaches:
+            try:
+                from sectoolkit.breach_check import check_password_breach
+                breach_result = check_password_breach(password)
+                result["breach_info"] = breach_result
+                
+                if breach_result["breached"]:
+                    breach_count += 1
+                    total_breach_appearances += breach_result.get("times_seen", 0)
+            except Exception:
+                result["breach_info"] = {"breached": False, "error": "Check failed"}
+        
+        password_results.append(result)
+    
+    # Calculate summary statistics
+    compliant_count = sum(1 for r in password_results if r["compliant"])
+    compliance_rate = (compliant_count / len(passwords)) * 100 if passwords else 0.0
+    
+    avg_score = sum(r["score"] for r in password_results) / len(password_results) if password_results else 0.0
+    
+    # Calculate security score (weighted combination of compliance and strength)
+    security_score = (compliance_rate * 0.7) + (avg_score * 0.3)
+    
+    # Get most common violations
+    common_violations = dict(sorted(violation_counts.items(), key=lambda x: x[1], reverse=True)[:5])
+    
+    result = {
+        "total_passwords": len(passwords),
+        "compliant_count": compliant_count,
+        "compliance_rate": compliance_rate,
+        "security_score": security_score,
+        "average_password_score": avg_score,
+        "common_violations": common_violations,
+        "password_results": password_results,
+    }
+    
+    # Add breach summary if checked
+    if check_breaches:
+        breach_rate = (breach_count / len(passwords)) * 100 if passwords else 0.0
+        most_breached = max(total_breach_appearances, 0) if total_breach_appearances > 0 else 0
+        
+        result["breach_summary"] = {
+            "breached_count": breach_count,
+            "breach_rate": breach_rate,
+            "total_breach_appearances": total_breach_appearances,
+            "most_breached": most_breached,
+        }
+    
+    return result
+
+
 def export_audit_report(audit_result: Dict[str, Any], filepath: str, fmt: str = "json") -> bool:
     """Export an audit report to JSON or CSV.
 

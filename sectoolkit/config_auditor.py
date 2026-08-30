@@ -162,7 +162,7 @@ def scan_for_insecure_bindings(pairs: Dict[str, str]) -> List[Dict[str, Any]]:
                 "key": key,
                 "value": value,
                 "severity": "medium",
-                "reason": f"'{key}' binds to 0.0.0.0 — exposed on all network interfaces",
+                "reason": f"'{key}' binds to 0.0.0.0 - exposed on all network interfaces",
             })
     return findings
 
@@ -239,6 +239,95 @@ def audit_json_config(filepath: str) -> Dict[str, Any]:
         "total_keys": len(pairs),
         "findings": findings,
         "risk_level": risk,
+    }
+
+
+def audit_config_file(filepath: str) -> Dict[str, Any]:
+    """Audit a configuration file for security issues.
+    
+    Auto-detects file type and applies appropriate parsing.
+    Returns a unified result format.
+    """
+    filename = os.path.basename(filepath).lower()
+    
+    # Determine file type and parse accordingly
+    if filename.endswith('.env') or 'env' in filename:
+        result = audit_env_file(filepath)
+        file_type = "env"
+    elif filename.endswith(('.ini', '.conf', '.cfg')):
+        result = audit_ini_file(filepath)
+        file_type = "ini"
+    elif filename.endswith('.json'):
+        result = audit_json_config(filepath)
+        file_type = "json"
+    elif filename.endswith(('.yml', '.yaml')):
+        # Treat YAML-like files as env for now (basic key=value parsing)
+        result = audit_env_file(filepath)
+        file_type = "yaml"
+    else:
+        # Try as env file (most permissive)
+        result = audit_env_file(filepath)
+        file_type = "unknown"
+    
+    # Convert to unified format
+    findings = result.get("findings", [])
+    
+    # Calculate risk score (0-100)
+    risk_score = 0
+    for finding in findings:
+        severity = finding.get("severity", "low")
+        if severity == "critical":
+            risk_score += 25
+        elif severity == "high":
+            risk_score += 15
+        elif severity == "medium":
+            risk_score += 10
+        elif severity == "low":
+            risk_score += 5
+    
+    risk_score = min(100, risk_score)
+    
+    # Convert findings to more user-friendly format
+    issues = []
+    for finding in findings:
+        issue = {
+            "type": finding.get("type", "security_issue"),
+            "key": finding.get("key", ""),
+            "severity": finding.get("severity", "low"),
+            "description": finding.get("reason", finding.get("description", "")),
+        }
+        
+        # Add value if not sensitive (not from secrets scan)
+        if "value_hint" in finding:
+            # This is a secret finding, show hint instead
+            issue["value"] = finding["value_hint"]
+        elif "value" in finding:
+            issue["value"] = finding["value"]
+        
+        # Add recommendation based on the reason/description
+        reason = finding.get("reason", "")
+        if "secret" in reason.lower():
+            issue["type"] = "secret_exposure"
+            issue["recommendation"] = "Move this secret to environment variables or a secure vault"
+        elif "dangerous flag" in reason.lower():
+            issue["type"] = "dangerous_flag"
+            issue["recommendation"] = "Disable this flag in production environments"
+        elif "0.0.0.0" in reason:
+            issue["type"] = "insecure_binding"
+            issue["recommendation"] = "Bind to specific interfaces instead of 0.0.0.0"
+        elif "weak" in reason.lower() or "default" in reason.lower():
+            issue["type"] = "weak_value"
+            issue["recommendation"] = "Use a strong, unique value"
+        
+        issues.append(issue)
+    
+    return {
+        "file": os.path.abspath(filepath),
+        "file_type": file_type,
+        "total_issues": len(issues),
+        "issues": issues,
+        "risk_level": result.get("risk_level", "low"),
+        "risk_score": risk_score,
     }
 
 

@@ -28,6 +28,9 @@ from sectoolkit.hash_verify import verify_file_hash, batch_verify_hashes, parse_
 from sectoolkit.sqli_detector import detect_sqli_in_url, detect_sqli_in_string, batch_analyze_urls
 from sectoolkit.xss_detector import detect_xss_in_string, analyze_html_context
 from sectoolkit.jwt_analyzer import parse_jwt, analyze_jwt_security, verify_jwt_signature
+from sectoolkit.file_monitor import snapshot_directory, save_snapshot, load_snapshot, compare_snapshots
+from sectoolkit.config_auditor import audit_config_file
+from sectoolkit.password_audit import audit_password_file
 from sectoolkit.api_security import test_http_methods, check_rate_limiting, check_cors_policy
 from sectoolkit.hash_crack import analyze_hash_type, rainbow_table_lookup, estimate_crack_time, compare_hash_algorithms
 from sectoolkit.threat_intel import check_ip_reputation, geoip_lookup, lookup_malicious_url, hash_threat_lookup, match_ioc
@@ -1085,6 +1088,215 @@ def report(input_file, output_file, report_format, title):
             export_html({"data": str(data)}, title=title, filepath=output_file)
 
     click.echo(f"Report saved to {output_file}")
+
+
+@cli.command(name="file-monitor")
+@click.argument("directory", type=click.Path(exists=True))
+@click.option("--snapshot-file", default="snapshot.json", help="File to save/load snapshots.")
+@click.option("--algorithm", "-a", default="sha256", help="Hash algorithm to use.")
+@click.option("--recursive", "-r", is_flag=True, default=True, help="Recursively scan subdirectories.")
+@click.option("--compare", is_flag=True, help="Compare with existing snapshot instead of creating new one.")
+def file_monitor(directory, snapshot_file, algorithm, recursive, compare):
+    """Monitor directory for file changes using hash snapshots.
+    
+    Creates a snapshot of all files in the directory with their hashes.
+    Use --compare to detect changes since the last snapshot.
+    """
+    from sectoolkit.file_monitor import (
+        snapshot_directory, save_snapshot, load_snapshot, compare_snapshots
+    )
+    
+    if compare:
+        # Load existing snapshot and compare
+        old_snapshot = load_snapshot(snapshot_file)
+        if old_snapshot is None:
+            raise click.ClickException(f"Could not load snapshot from {snapshot_file}")
+        
+        click.echo("Creating current snapshot...")
+        new_snapshot = snapshot_directory(directory, algorithm=algorithm, recursive=recursive)
+        
+        click.echo("Comparing snapshots...")
+        changes = compare_snapshots(old_snapshot, new_snapshot)
+        
+        click.echo(f"\n{changes['summary']}")
+        
+        if changes["added"]:
+            click.echo(f"\nAdded files ({len(changes['added'])}):")
+            for path in changes["added"]:
+                click.echo(f"  + {path}")
+        
+        if changes["removed"]:
+            click.echo(f"\nRemoved files ({len(changes['removed'])}):")
+            for path in changes["removed"]:
+                click.echo(f"  - {path}")
+        
+        if changes["modified"]:
+            click.echo(f"\nModified files ({len(changes['modified'])}):")
+            for path in changes["modified"]:
+                click.echo(f"  * {path}")
+        
+        if changes["unchanged"] > 0:
+            click.echo(f"\nUnchanged files: {changes['unchanged']}")
+        
+        # Save new snapshot for next comparison
+        if save_snapshot(new_snapshot, snapshot_file):
+            click.echo(f"\nSnapshot updated: {snapshot_file}")
+        else:
+            click.echo(f"\nWarning: Could not save snapshot to {snapshot_file}")
+    else:
+        # Create new snapshot
+        click.echo(f"Creating snapshot of {directory}...")
+        snapshot = snapshot_directory(directory, algorithm=algorithm, recursive=recursive)
+        
+        if save_snapshot(snapshot, snapshot_file):
+            click.echo(f"Snapshot saved: {snapshot_file}")
+            click.echo(f"Files scanned: {len(snapshot['files'])}")
+            click.echo(f"Algorithm: {snapshot['algorithm']}")
+        else:
+            raise click.ClickException(f"Could not save snapshot to {snapshot_file}")
+
+
+@cli.command(name="config-audit")
+@click.argument("config_file", type=click.Path(exists=True))
+@click.option("--json", "output_json", is_flag=True, help="Output in JSON format.")
+@click.option("--severity", type=click.Choice(["low", "medium", "high"]), help="Only show issues of specified severity or higher.")
+def config_audit(config_file, output_json, severity):
+    """Audit configuration files for security issues.
+    
+    Supports .env, .ini, .json, and YAML-like config files.
+    Detects exposed secrets, weak settings, debug flags, etc.
+    """
+    from sectoolkit.config_auditor import audit_config_file
+    
+    result = audit_config_file(config_file)
+    
+    if output_json:
+        import json
+        click.echo(json.dumps(result, indent=2))
+        return
+    
+    click.echo(f"Auditing: {config_file}")
+    click.echo(f"File type: {result['file_type']}")
+    click.echo(f"Total issues: {result['total_issues']}")
+    
+    if result['risk_score'] > 0:
+        click.echo(f"Risk score: {result['risk_score']}/100\n")
+    
+    # Filter by severity if specified
+    issues_to_show = result['issues']
+    if severity:
+        severity_levels = {"low": 1, "medium": 2, "high": 3}
+        min_level = severity_levels[severity]
+        issues_to_show = [
+            issue for issue in issues_to_show 
+            if severity_levels.get(issue.get('severity', 'low'), 1) >= min_level
+        ]
+    
+    if issues_to_show:
+        for issue in issues_to_show:
+            severity_indicator = {
+                'low': 'INFO',
+                'medium': 'WARN',
+                'high': 'CRITICAL'
+            }.get(issue.get('severity', 'low'), 'INFO')
+            
+            click.echo(f"{severity_indicator} {issue['type'].upper()}")
+            click.echo(f"  Key: {issue['key']}")
+            if 'value' in issue and issue['value']:
+                value_preview = str(issue['value'])[:50]
+                if len(str(issue['value'])) > 50:
+                    value_preview += "..."
+                click.echo(f"  Value: {value_preview}")
+            click.echo(f"  Issue: {issue['description']}")
+            if 'recommendation' in issue and issue['recommendation']:
+                click.echo(f"  Fix: {issue['recommendation']}")
+            click.echo("")
+    else:
+        if severity:
+            click.echo(f"No {severity}+ severity issues found.")
+        else:
+            click.echo("No security issues found.")
+
+
+@cli.command(name="password-audit")
+@click.argument("password_file", type=click.Path(exists=True))
+@click.option("--format", "file_format", type=click.Choice(["txt", "csv"]), default="txt", help="Input file format.")
+@click.option("--column", default=1, help="Column number for passwords in CSV (1-based).")
+@click.option("--policy-file", type=click.Path(exists=True), help="JSON file with custom password policy.")
+@click.option("--export", "export_path", help="Export results to file.")
+@click.option("--export-format", type=click.Choice(["json", "csv", "html"]), default="json", help="Export format.")
+@click.option("--breach-check", is_flag=True, help="Check passwords against breach database (requires internet).")
+def password_audit(password_file, file_format, column, policy_file, export_path, export_format, breach_check):
+    """Audit a list of passwords for policy compliance and breaches.
+    
+    Supports text files (one password per line) or CSV files.
+    Checks against password policies and optionally breach databases.
+    """
+    from sectoolkit.password_audit import audit_password_file
+    from sectoolkit.reporter import export_json, export_csv, export_html
+    
+    # Load custom policy if provided
+    policy = None
+    if policy_file:
+        import json
+        try:
+            with open(policy_file, 'r') as f:
+                policy = json.load(f)
+        except Exception as e:
+            raise click.ClickException(f"Could not load policy file: {e}")
+    
+    click.echo(f"Auditing passwords from {password_file}...")
+    if breach_check:
+        click.echo("Breach checking enabled (this may take some time)...")
+    
+    result = audit_password_file(
+        password_file, 
+        file_format=file_format,
+        password_column=column,
+        policy=policy,
+        check_breaches=breach_check
+    )
+    
+    # Display summary
+    click.echo(f"\n[Audit Summary]")
+    click.echo(f"Total passwords: {result['total_passwords']}")
+    click.echo(f"Policy compliant: {result['compliant_count']} ({result['compliance_rate']:.1f}%)")
+    
+    if result['common_violations']:
+        click.echo(f"\n[Most Common Violations]")
+        for violation, count in result['common_violations'].items():
+            click.echo(f"  {violation}: {count}")
+    
+    if breach_check and result.get('breach_summary'):
+        breach = result['breach_summary']
+        click.echo(f"\n[Breach Check Results]")
+        click.echo(f"Breached passwords: {breach['breached_count']} ({breach['breach_rate']:.1f}%)")
+        if breach['most_breached']:
+            click.echo(f"Most breached password appeared in: {breach['most_breached']} breaches")
+    
+    click.echo(f"\n[Security Score]")
+    click.echo(f"Overall score: {result['security_score']:.1f}/100")
+    
+    # Export if requested
+    if export_path:
+        if export_format == "json":
+            export_json(result, export_path)
+        elif export_format == "csv":
+            # Convert to CSV-friendly format
+            csv_data = []
+            for i, pwd_result in enumerate(result.get('password_results', [])):
+                csv_data.append({
+                    'password_index': i + 1,
+                    'compliant': pwd_result.get('compliant', False),
+                    'score': pwd_result.get('score', 0),
+                    'violations': '; '.join(pwd_result.get('violations', [])),
+                    'breached': pwd_result.get('breach_info', {}).get('breached', False) if breach_check else 'N/A'
+                })
+            export_csv(csv_data, export_path)
+        elif export_format == "html":
+            export_html(result, title="Password Audit Report", filepath=export_path)
+        
+        click.echo(f"Results exported to {export_path}")
 
 
 if __name__ == "__main__":
